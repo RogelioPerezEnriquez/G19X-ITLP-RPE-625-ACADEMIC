@@ -1,9 +1,10 @@
 import os
+from pathlib import Path
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
 # Carga las variables de entorno desde .env
-load_dotenv(".env")
+load_dotenv(Path(__file__).parent.parent /".env")
 
 url: str = os.environ.get("SUPABASE_URL")
 anon_key: str = os.environ.get("SUPABASE_ANON_KEY")

@@ -1,8 +1,9 @@
 import os
+from pathlib import Path
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
-load_dotenv(".env")
+load_dotenv(Path(__file__).parent.parent /".env")
 
 url: str | None = os.environ.get("SUPABASE_URL")
 service_key: str | None = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")

@@ -1,9 +1,10 @@
-# test_zai.py
+# verificar_zai.py
 import os
+from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv(".env")
+load_dotenv(Path(__file__).parent.parent /".env")
 
 client = OpenAI(
     api_key=os.getenv("LLM_API_KEY"),
