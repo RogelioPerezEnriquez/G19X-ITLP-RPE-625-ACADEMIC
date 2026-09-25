@@ -1,0 +1,305 @@
+"""Tests unitarios de la estimación de demanda del motor OR.
+
+Solo pruebas de la función pura ``src.motor.demanda.estimar_demanda``: no se
+toca red, base de datos ni archivos.
+"""
+
+import pandas as pd
+import pytest
+
+from src.motor.demanda import VENTANA_DEFAULT, estimar_demanda
+
+
+# ---------------------------------------------------------------- utilidades
+
+
+def _historial(
+    producto_id: list,
+    periodo: list,
+    cantidad_demandada: list,
+) -> pd.DataFrame:
+    """Construye el DataFrame de entrada mínimo que espera el motor."""
+    return pd.DataFrame(
+        {
+            "producto_id": producto_id,
+            "periodo": periodo,
+            "cantidad_demandada": cantidad_demandada,
+        }
+    )
+
+
+def _periodos(
+    producto_id: str, cantidades: list, inicio: str = "2025-01-01"
+) -> pd.DataFrame:
+    """Historial de un solo producto, con un periodo mensual por cantidad."""
+    return _historial(
+        [producto_id] * len(cantidades),
+        list(pd.date_range(start=inicio, periods=len(cantidades), freq="MS")),
+        list(cantidades),
+    )
+
+
+def _apilados(por_producto: dict) -> pd.DataFrame:
+    """Concatena varios productos {producto_id: [cantidades]}.
+
+    Las filas de cada producto van en bloque, para que el orden de entrada sea
+    distinto del orden de salida esperado (producto_id ascendente).
+    """
+    partes = [_periodos(pid, cantidades) for pid, cantidades in por_producto.items()]
+    return pd.concat(partes, ignore_index=True)
+
+
+def _demanda(resultado: pd.DataFrame, producto_id: str) -> float:
+    """demanda_estimada del producto indicado, sin depender del orden."""
+    return resultado.set_index("producto_id").loc[producto_id, "demanda_estimada"]
+
+
+# ------------------------------------------------------------ caso principal
+
+
+def test_caso_normal_del_ejemplo_con_ventana_6():
+    """P001 del ejemplo: últimos 6 de 8 periodos = [98, 102, 110, 95, 108, 100]."""
+    historial = _periodos("P001", [100, 105, 98, 102, 110, 95, 108, 100])
+
+    resultado = estimar_demanda(historial, ventana=6)
+
+    assert _demanda(resultado, "P001") == pytest.approx(613 / 6)
+    assert _demanda(resultado, "P001") == pytest.approx(102.1667, abs=1e-4)
+    assert resultado["demanda_estimada"].dtype == "float64"
+
+
+def test_caso_normal_del_ejemplo_con_ventana_3():
+    """P001 del ejemplo: los últimos 3 periodos son [95, 108, 100]."""
+    historial = _periodos("P001", [100, 105, 98, 102, 110, 95, 108, 100])
+
+    resultado = estimar_demanda(historial, ventana=3)
+
+    assert _demanda(resultado, "P001") == pytest.approx(101.0)
+
+
+def test_producto_con_menos_periodos_que_la_ventana_usa_todos():
+    """P002 del ejemplo: 2 periodos con ventana=6 -> (50 + 80) / 2."""
+    resultado = estimar_demanda(_periodos("P002", [50, 80]), ventana=6)
+
+    assert resultado["producto_id"].tolist() == ["P002"]
+    assert _demanda(resultado, "P002") == pytest.approx(65.0)
+
+
+def test_producto_con_exactamente_la_ventana_usa_todos_los_periodos():
+    resultado = estimar_demanda(
+        _periodos("P001", [10.0, 20.0, 30.0, 40.0, 50.0, 60.0]), ventana=6
+    )
+
+    assert _demanda(resultado, "P001") == pytest.approx(35.0)
+
+
+def test_ventana_por_defecto_es_la_constante_del_modulo():
+    """Sin el argumento se usa VENTANA_DEFAULT, que vale 6."""
+    historial = _periodos("P001", [100, 105, 98, 102, 110, 95, 108, 100])
+
+    por_defecto = estimar_demanda(historial)
+    explicito = estimar_demanda(historial, ventana=VENTANA_DEFAULT)
+
+    assert VENTANA_DEFAULT == 6
+    assert _demanda(por_defecto, "P001") == pytest.approx(_demanda(explicito, "P001"))
+    assert _demanda(por_defecto, "P001") == pytest.approx(613 / 6)
+
+
+def test_ventana_1_devuelve_el_ultimo_periodo_por_fecha():
+    """Con ventana=1 se toma el periodo más reciente, no la primera fila."""
+    historial = _periodos("P001", [100, 105, 98, 102, 110, 95, 108, 111])
+    desordenado = historial.iloc[[3, 0, 7, 5, 1, 6, 2, 4]]
+
+    resultado = estimar_demanda(desordenado, ventana=1)
+
+    assert _demanda(resultado, "P001") == pytest.approx(111.0)
+    assert _demanda(resultado, "P001") != pytest.approx(100.0)
+
+
+# ------------------------------------------------------ validación de entrada
+
+
+@pytest.mark.parametrize("ventana", [0, -1])
+def test_ventana_no_positiva_lanza_value_error(ventana):
+    with pytest.raises(ValueError, match="ventana"):
+        estimar_demanda(_periodos("P001", [10.0, 20.0]), ventana=ventana)
+
+
+@pytest.mark.parametrize("ventana", ["6", 6.5])
+def test_ventana_no_entera_lanza_value_error(ventana):
+    with pytest.raises(ValueError, match="ventana"):
+        estimar_demanda(_periodos("P001", [10.0, 20.0]), ventana=ventana)
+
+
+def test_ventana_booleana_lanza_value_error():
+    """True pasa isinstance(True, int) pero no es una ventana válida."""
+    with pytest.raises(ValueError, match="ventana"):
+        estimar_demanda(_periodos("P001", [10.0, 20.0]), ventana=True)
+
+
+def test_dataframe_vacio_con_columnas_correctas_devuelve_vacio():
+    vacio = pd.DataFrame(
+        {
+            "producto_id": pd.Series(dtype=object),
+            "periodo": pd.Series(dtype=object),
+            "cantidad_demandada": pd.Series(dtype="float64"),
+        }
+    )
+
+    resultado = estimar_demanda(vacio)
+
+    assert resultado.empty
+    assert list(resultado.columns) == ["producto_id", "demanda_estimada"]
+    assert resultado["producto_id"].dtype == object
+    assert resultado["demanda_estimada"].dtype == "float64"
+    assert resultado.index.tolist() == []
+
+
+def test_dataframe_vacio_sin_columnas_lanza_value_error():
+    with pytest.raises(ValueError, match="producto_id"):
+        estimar_demanda(pd.DataFrame())
+
+
+def test_dataframe_con_filas_sin_columnas_lanza_value_error():
+    historial = pd.DataFrame({"producto_id": ["P001"], "periodo": ["2025-01-01"]})
+
+    with pytest.raises(ValueError, match="cantidad_demandada"):
+        estimar_demanda(historial)
+
+
+def test_producto_sin_historial_no_aparece_en_la_salida():
+    """La salida solo contiene los productos con filas en el historial."""
+    resultado = estimar_demanda(_periodos("P001", [10.0, 20.0]), ventana=6)
+
+    assert resultado["producto_id"].tolist() == ["P001"]
+    assert "P002" not in set(resultado["producto_id"])
+
+
+def test_producto_con_todos_los_periodos_en_cero():
+    """Una demanda estimada de 0 es información válida, no un error."""
+    resultado = estimar_demanda(_periodos("P001", [0.0, 0.0, 0.0]), ventana=6)
+
+    assert resultado["producto_id"].tolist() == ["P001"]
+    assert _demanda(resultado, "P001") == 0.0
+
+
+def test_periodo_no_parseable_lanza_value_error_y_no_parser_error():
+    historial = _historial(
+        ["P001", "P001"], ["2025-01-01", "no-es-fecha"], [100.0, 105.0]
+    )
+
+    with pytest.raises(ValueError, match="fecha") as excepcion:
+        estimar_demanda(historial)
+
+    # El error nativo de pandas (DateParseError) ya es un ValueError: se
+    # comprueba que el módulo relanza un ValueError propio en lugar de dejar
+    # pasar el tipo nativo.
+    assert type(excepcion.value) is ValueError
+    assert not isinstance(excepcion.value, pd.errors.ParserError)
+
+
+# ------------------------------------------- orden, pureza y tipo de periodo
+
+
+def test_el_orden_de_las_filas_de_entrada_no_altera_el_resultado():
+    historial = _periodos("P001", [100, 105, 98, 102, 110, 95, 108, 100])
+    desordenado = historial.iloc[[5, 0, 3, 7, 1, 6, 2, 4]]
+
+    pd.testing.assert_frame_equal(
+        estimar_demanda(historial, ventana=3),
+        estimar_demanda(desordenado, ventana=3),
+    )
+
+
+def test_los_periodos_se_ordenan_cronologicamente_no_por_aparicion():
+    """Con filas desordenadas, la ventana toma los periodos más recientes.
+
+    Las tres primeras filas de la entrada son agosto, enero y julio; si la
+    ventana se tomara por orden de aparición el promedio daría 102.67.
+    """
+    desordenado = _periodos("P001", [100, 105, 98, 102, 110, 95, 108, 100]).iloc[
+        [7, 0, 6, 1, 5, 2, 4, 3]
+    ]
+
+    resultado = estimar_demanda(desordenado, ventana=3)
+
+    assert _demanda(resultado, "P001") == pytest.approx(101.0)
+
+
+def test_la_salida_esta_ordenada_por_producto_id():
+    historial = _apilados(
+        {
+            "P003": [30.0, 30.0],
+            "P001": [10.0, 10.0],
+            "P002": [20.0, 20.0],
+        }
+    )
+
+    resultado = estimar_demanda(historial, ventana=6)
+
+    assert resultado["producto_id"].tolist() == ["P001", "P002", "P003"]
+    assert resultado.index.tolist() == [0, 1, 2]
+
+
+def test_no_modifica_el_dataframe_de_entrada():
+    historial = _periodos("P001", [100, 105, 98, 102, 110, 95, 108, 100])
+    copia = historial.copy(deep=True)
+
+    estimar_demanda(historial, ventana=3)
+
+    pd.testing.assert_frame_equal(historial, copia)
+    assert historial["periodo"].dtype == copia["periodo"].dtype
+    assert "demanda_estimada" not in historial.columns
+
+
+def test_periodo_con_formato_string_se_parsea():
+    como_texto = _historial(
+        ["P001"] * 4,
+        ["2025-01-01", "2025-02-01", "2025-03-01", "2025-04-01"],
+        [100, 105, 98, 102],
+    )
+
+    resultado = estimar_demanda(como_texto, ventana=2)
+
+    assert _demanda(resultado, "P001") == pytest.approx(100.0)
+    pd.testing.assert_frame_equal(
+        resultado, estimar_demanda(_periodos("P001", [100, 105, 98, 102]), ventana=2)
+    )
+
+
+def test_multiples_productos_se_calculan_por_separado():
+    historial = _apilados(
+        {
+            "P001": [100, 105, 98, 102, 110, 95, 108, 100],
+            "P002": [50, 80],
+            "P003": [7.0],
+        }
+    )
+
+    resultado = estimar_demanda(historial, ventana=6)
+
+    assert resultado["producto_id"].tolist() == ["P001", "P002", "P003"]
+    assert _demanda(resultado, "P001") == pytest.approx(613 / 6)
+    assert _demanda(resultado, "P002") == pytest.approx(65.0)
+    assert _demanda(resultado, "P003") == pytest.approx(7.0)
+
+
+# ------------------------------------------------------------------- escala
+
+
+def test_valores_muy_grandes_no_rompen_el_calculo():
+    resultado = estimar_demanda(
+        _periodos("P001", [1e12, 1.1e12, 0.9e12, 1.05e12]), ventana=3
+    )
+
+    assert _demanda(resultado, "P001") == pytest.approx(
+        (1.1e12 + 0.9e12 + 1.05e12) / 3, rel=1e-9
+    )
+
+
+def test_valores_muy_pequenos_no_rompen_el_calculo():
+    resultado = estimar_demanda(_periodos("P001", [1e-9, 1.2e-9, 0.8e-9]), ventana=3)
+
+    assert _demanda(resultado, "P001") == pytest.approx(
+        (1e-9 + 1.2e-9 + 0.8e-9) / 3, rel=1e-9
+    )
