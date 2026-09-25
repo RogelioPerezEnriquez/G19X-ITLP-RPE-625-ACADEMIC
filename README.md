@@ -156,3 +156,4 @@ Ver `MVP.md` para detalle de cada componente.
 ## Licencia
 
 Proyecto académico. Uso educativo.
+
