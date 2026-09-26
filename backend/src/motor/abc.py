@@ -75,24 +75,29 @@ def clasificar_abc(productos: pd.DataFrame) -> pd.DataFrame:
           participación es un artefacto del tamaño del catálogo y no una señal
           de importancia relativa. Si ese único producto vale 0, se aplica la
           regla de valor total 0 (clase 'C').
-        - Si el DataFrame está vacío, se devuelve una copia vacía con la
-          columna 'clase_abc' (dtype object), sin lanzar excepción.
+        - Las columnas requeridas se validan siempre, tenga o no filas el
+          DataFrame: es la misma política estricta que el resto del motor.
+        - Si el DataFrame está vacío y trae las columnas requeridas, se
+          devuelve una copia vacía con la columna 'clase_abc' (dtype object).
         - Si el valor económico total es 0 (todos los productos valen 0), todos
           los productos se asignan a clase 'C', sin dividir por cero.
 
     Raises:
-        ValueError: si el DataFrame tiene filas pero le falta alguna de las
-            columnas requeridas (producto_id, costo_unitario, demanda_total).
+        ValueError: si le falta alguna de las columnas requeridas
+            (producto_id, costo_unitario, demanda_total), aunque el DataFrame
+            no traiga filas.
     """
     resultado: pd.DataFrame = productos.copy()
 
-    # Un DataFrame vacío se devuelve vacío con la columna creada, incluso si no
-    # trae todas las columnas requeridas (no hay nada que clasificar).
+    # La validación de columnas es estricta y ocurre siempre, tenga o no filas
+    # la entrada: es la política común a todos los módulos del motor.
+    _verificar_columnas(resultado)
+
+    # Con las columnas ya garantizadas, un DataFrame vacío se devuelve vacío
+    # con la columna creada (no hay nada que clasificar).
     if resultado.empty:
         resultado["clase_abc"] = pd.Series(index=resultado.index, dtype="object")
         return resultado
-
-    _verificar_columnas(resultado)
 
     valor_economico: pd.Series = (
         resultado["costo_unitario"].astype("float64")

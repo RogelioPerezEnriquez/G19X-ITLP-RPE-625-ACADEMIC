@@ -112,15 +112,26 @@ def test_dataframe_vacio_devuelve_copia_vacia_sin_error():
     assert pd.api.types.is_string_dtype(resultado["clase_abc"])
 
 
-def test_dataframe_vacio_sin_columnas_no_lanza_excepcion():
-    resultado = clasificar_abc(pd.DataFrame())
+def test_dataframe_vacio_sin_columnas_lanza_value_error():
+    """Sin filas pero sin columnas también falla: la validación es estricta."""
+    with pytest.raises(ValueError, match="faltan") as excepcion:
+        clasificar_abc(pd.DataFrame())
 
-    assert resultado.empty
-    assert list(resultado.columns) == ["clase_abc"]
+    # El mensaje nombra cada columna requerida que falta.
+    mensaje = str(excepcion.value)
+    assert "producto_id" in mensaje
+    assert "costo_unitario" in mensaje
+    assert "demanda_total" in mensaje
 
 
 def test_dataframe_vacio_no_se_modifica_a_si_mismo():
-    vacio = pd.DataFrame({"producto_id": pd.Series(dtype="object")})
+    vacio = pd.DataFrame(
+        {
+            "producto_id": pd.Series(dtype="object"),
+            "costo_unitario": pd.Series(dtype="float64"),
+            "demanda_total": pd.Series(dtype="float64"),
+        }
+    )
     copia = vacio.copy(deep=True)
 
     clasificar_abc(vacio)

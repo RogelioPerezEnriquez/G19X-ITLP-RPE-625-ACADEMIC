@@ -1,12 +1,13 @@
 ## Deuda técnica
 
-- [ ] **Unificar validación de columnas entre módulos del motor**
-      - `abc.py`: permisivo con DataFrames vacíos sin columnas (devuelve vacío).
-      - `xyz.py`, `demanda.py`, `eoq_rop.py`, `proveedor.py`, `ahorro.py` y
-        siguientes: estricto (lanza `ValueError` siempre).
+- [x] **Unificar validación de columnas entre módulos del motor** — resuelto
+      - `abc.py` valida las columnas requeridas antes del chequeo de DataFrame
+        vacío, así que un DataFrame vacío sin columnas lanza `ValueError` igual
+        que `xyz.py`, `demanda.py`, `eoq_rop.py`, `proveedor.py` y `ahorro.py`.
+      - Un DataFrame vacío **con** las columnas requeridas sigue devolviendo
+        una copia vacía con la columna `clase_abc`.
       - Motivo de la divergencia: `abc.py` se escribió antes de decidir la
-        política estricta.
-      - Revisar al terminar los 6 módulos del motor.
+        política estricta; se corrigió al terminar los 6 módulos del motor.
 
 - [ ] **Extraer umbrales y parámetros a `parametros_configuracion`** (fase 4)
       - `abc.py`: `UMBRAL_CLASE_A`, `UMBRAL_CLASE_B`.
