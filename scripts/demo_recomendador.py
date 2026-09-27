@@ -260,7 +260,7 @@ def _preguntar_guardar() -> bool:
     """
     try:
         respuesta = input(
-            "Desea guardar estas recomendaciones en Supabase? [s/N]: "
+            "Desea guardar estas recomendaciones en Supabase? [S/N]: "
         )
     except EOFError:
         print("Sin entrada estandar disponible: no se guardo nada.")

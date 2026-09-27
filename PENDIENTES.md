@@ -24,6 +24,21 @@ aspectos a revisar antes de cerrar el MVP.
       - Con `inf`, cualquier `ahorro_neto` queda "Sin oportunidad adicional".
       - Corregir añadiendo `math.isinf` a la validación.
 
+- [ ] **Ajustar el seed para alinear clases ABC/XYZ con el diseño original**
+      (opcional, después del MVP)
+      - `SEED_Engrane G7`: diseño A/Z, real A/Y.
+      - `SEED_Widget B`: diseño A/Y, real A/X.
+      - `SEED_Cable HDMI`: diseño C/Z, real C/Y.
+      - `SEED_Pintura 1L`: diseño C/Y, real A/X.
+      - Motivo: el seed se diseñó con estimaciones a ojo de la variabilidad
+        (CV). El motor calcula los CV reales, que resultan más bajos.
+
+- [ ] **Revisar `stock_actual` del seed para generar al menos un "Crítico"**
+      (opcional, para la demo)
+      - Actualmente ningún producto cae en "Crítico" con los datos del seed.
+      - Ajustar el `stock_actual` de algún producto para que
+        `stock_actual <= stock_seguridad`.
+
 ## Resueltos
 
 - [x] **Unificar validación de columnas entre módulos del motor**
@@ -77,6 +92,24 @@ aspectos a revisar antes de cerrar el MVP.
   - No tienen historial o tienen < 2 periodos.
   - No tienen ningún proveedor en `producto_proveedor`.
   - Tienen `cv_demanda` no calculable (demanda media cero).
+
+## Notas de integración
+
+- **Verificación end-to-end exitosa**: el recomendador funciona con los
+  datos reales del seed. Se generaron 6 recomendaciones:
+  - Atención: 1 (SEED_Engrane G7)
+  - Sin riesgo: 5
+  - Crítico: 0
+  - Con "Ahorro detectado": 2 (Engrane G7, Tornillo M3)
+  - Suma total de ahorro neto: $1,869.75
+
+- **Discrepancias entre diseño del seed y resultados reales**: las clases
+  ABC/XYZ calculadas por el motor no coinciden exactamente con las que se
+  diseñaron al crear el seed. El motivo está documentado en la sección de
+  deuda técnica.
+
+- **Ninguna recomendación cae en "Crítico"**: era esperado con los stocks
+  actuales del seed. Documentado en deuda técnica.
 
 ## Casos conocidos y documentados
 
