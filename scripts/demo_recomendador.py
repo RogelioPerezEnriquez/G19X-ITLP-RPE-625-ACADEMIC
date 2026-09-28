@@ -32,7 +32,11 @@ Que hace
    ABC/XYZ, urgencia, stock actual vs punto de reorden, cantidad recomendada y
    ahorro neto) y un resumen agregado al final.
 5. Pregunta si guardar y, solo con respuesta afirmativa, llama a
-   ``guardar_recomendaciones(supabase, recomendaciones)``.
+   ``guardar_recomendaciones(supabase, recomendaciones)``, captura el DataFrame
+   que devuelve (las filas ya persistidas, con el ``id`` uuid que genero Supabase)
+   y lo muestra en pantalla. Esos ``id`` son el ``recomendacion_id`` que necesita
+   el evaluador de la rubrica (``backend/src/evaluador.py``): el script deja el
+   flujo listo para llamarlo despues.
 
 Que NO hace
 -----------
@@ -41,7 +45,9 @@ Que NO hace
   ``db/seed_sintetico.sql`` y ``scripts/verificar_*.py``).
 - No borra ni limpia recomendaciones existentes: ``guardar_recomendaciones``
   solo inserta filas nuevas.
-- No calcula la rubrica de 6 criterios ni escribe en ``evaluaciones_criterios``.
+- No calcula la rubrica de 6 criterios ni escribe en ``evaluaciones_criterios``:
+  solo deja a la vista los ``id`` que devuelve el guardado, que son la entrada de
+  ese evaluador.
 - No usa colores ANSI ni emojis: la salida es texto plano pensado para Windows.
 
 Decision de import (``sys.path``)
@@ -250,6 +256,38 @@ def _imprimir_resumen(recomendaciones: pd.DataFrame) -> None:
     print(f"Suma de ahorro_neto_estimado: {_formato_numero(ahorro_total)}")
 
 
+def _imprimir_guardadas(guardadas: pd.DataFrame) -> None:
+    """Imprime los ids que Supabase asigno a las recomendaciones guardadas.
+
+    Args:
+        guardadas: DataFrame devuelto por
+            :func:`src.recomendador.guardar_recomendaciones`: las filas insertadas
+            en la tabla 'recomendaciones', con su 'id' (uuid), su
+            'fecha_generacion' y el resto de las columnas de la tabla.
+    """
+    print()
+    print("-" * ANCHO_REPORTE)
+    print("RECOMENDACIONES GUARDADAS")
+    print("-" * ANCHO_REPORTE)
+
+    if guardadas.empty or "id" not in guardadas.columns:
+        print("Supabase no devolvio las filas insertadas: no hay ids que mostrar.")
+        print("Las recomendaciones igual quedaron guardadas en la tabla.")
+        return
+
+    encabezados: list[str] = ["producto_id", "id"]
+    filas: list[list[str]] = [
+        [str(fila["producto_id"]), str(fila["id"])] for _, fila in guardadas.iterrows()
+    ]
+    _imprimir_tabla(encabezados, filas)
+    print()
+    print(f"Filas devueltas por el insert: {len(guardadas)}")
+    print("El 'id' (uuid) de cada fila es el 'recomendacion_id' que necesita la")
+    print("rubrica de 6 criterios (backend/src/evaluador.py). Como el insert solo")
+    print("devuelve las columnas de la tabla, hay que cruzar estos ids con el")
+    print("reporte (por producto_id) para armar la entrada del evaluador.")
+
+
 def _preguntar_guardar() -> bool:
     """Pregunta si se quieren guardar las recomendaciones en Supabase.
 
@@ -304,12 +342,13 @@ def main() -> int:
         print("Operacion cancelada: no se escribio nada en Supabase.")
         return 0
 
-    guardar_recomendaciones(supabase, recomendaciones)
+    guardadas: pd.DataFrame = guardar_recomendaciones(supabase, recomendaciones)
     print()
     print(
         f"OK: se guardaron {len(recomendaciones)} recomendaciones en la tabla "
         "'recomendaciones'."
     )
+    _imprimir_guardadas(guardadas)
     return 0
 
 

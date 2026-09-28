@@ -13,7 +13,8 @@ separadas:
   :func:`calcular_recomendaciones`. Solo hace E/S: no contiene lógica de
   negocio.
 * :func:`guardar_recomendaciones` -- escribe las recomendaciones en la tabla
-  ``recomendaciones``. Solo hace E/S: no calcula nada.
+  ``recomendaciones`` y **devuelve las filas insertadas**, con los ``id`` (uuid)
+  que generó Supabase. Solo hace E/S: no calcula nada.
 
 Convención de nombres de columna
 --------------------------------
@@ -610,14 +611,15 @@ def generar_recomendaciones(supabase_client) -> pd.DataFrame:
 def guardar_recomendaciones(
     supabase_client,
     recomendaciones: pd.DataFrame,
-) -> None:
+) -> pd.DataFrame:
     """
     Escribe las recomendaciones en la tabla ``recomendaciones`` de Supabase.
 
     Filtra las columnas de :data:`COLUMNAS_RECOMENDACIONES` (las que van a la
     tabla; ``id``, ``fecha_generacion`` y ``estado`` los pone Supabase por default
     con ``now()`` y ``'pendiente'``), las convierte en una lista de diccionarios y
-    las inserta con ``insert``.
+    las inserta con ``insert``. Las filas insertadas, con sus ``id`` ya generados,
+    se devuelven como DataFrame.
 
     Args:
         supabase_client: cliente de Supabase configurado con la
@@ -628,16 +630,33 @@ def guardar_recomendaciones(
             columnas de :data:`COLUMNAS_RECOMENDACIONES`).
 
     Returns:
-        None. Un DataFrame sin filas no genera ninguna petición.
+        DataFrame con las filas que devolvió la API tras el ``insert``, es decir
+        las recomendaciones ya persistidas con las columnas de la tabla
+        ``recomendaciones``: ``id`` (el uuid generado por Supabase),
+        ``producto_id``, ``proveedor_id``, ``fecha_generacion``,
+        ``demanda_estimada``, ``cv_demanda``, ``punto_reorden``,
+        ``stock_seguridad``, ``cantidad_eoq``, ``cantidad_recomendada``,
+        ``clase_abc``, ``clase_xyz``, ``lead_time_dias``, ``precio_unitario``,
+        ``ahorro_neto_estimado`` y ``estado``. Un DataFrame sin filas devuelve un
+        DataFrame vacío: no se hace ninguna petición y no hay nada que devolver.
 
     Notas:
         - Solo hace E/S: no calcula nada ni modifica ``recomendaciones``.
         - No escribe en ``evaluaciones_criterios``: esa es responsabilidad del
           evaluador de la rúbrica.
+        - El ``id`` que devuelve esta función es el ``recomendacion_id`` que
+          necesita el evaluador de la rúbrica. Como el ``insert`` solo devuelve
+          las columnas de la tabla, para armar su entrada hay que cruzar estos
+          ``id`` con el DataFrame original (por ``producto_id``): las columnas
+          ``stock_actual``, ``costo_total_pedido`` y ``score_proveedor``, entre
+          otras, no se guardan en ``recomendaciones``.
         - Los escalares de numpy (``np.int64``, ``np.float64``, ...) se convierten
           a tipos nativos antes de insertar, porque el cliente de Supabase
           serializa el cuerpo con el módulo ``json`` estándar, que no los sabe
           serializar.
+        - Si la API no devolviera las filas insertadas (``data`` nulo o vacío) se
+          devuelve un DataFrame vacío en lugar de fallar: el ``insert`` ya se
+          hizo.
 
     Raises:
         ValueError: si al DataFrame le falta alguna columna de
@@ -660,14 +679,19 @@ def guardar_recomendaciones(
 
     seleccion: pd.DataFrame = recomendaciones[list(COLUMNAS_RECOMENDACIONES)]
     if seleccion.empty:
-        return
+        return pd.DataFrame()
 
     registros: list[dict[str, object]] = [
         {columna: _escalar_nativo(valor) for columna, valor in fila.items()}
         for fila in seleccion.to_dict(orient="records")
     ]
 
-    supabase_client.table("recomendaciones").insert(registros).execute()
+    respuesta = supabase_client.table("recomendaciones").insert(registros).execute()
+
+    # La API devuelve las filas insertadas en 'data', ya con el id (uuid) y los
+    # valores por defecto que puso Supabase. Si no viniera nada, se devuelve un
+    # DataFrame vacío en lugar de fallar: el insert ya se realizó.
+    return pd.DataFrame(respuesta.data if respuesta.data else [])
 
 
 def _productos_validos(
