@@ -136,7 +136,10 @@ insert into parametros_configuracion (nombre_parametro, valor, descripcion) valu
     ('cv_confianza_media',       1.0,  'CV máximo para clasificar la demanda como "confianza moderada" / clase Y'),
     ('score_proveedor_confiable', 80,  'Score mínimo para considerar a un proveedor "confiable"'),
     ('score_proveedor_riesgoso',  60,  'Score por debajo del cual un proveedor se considera "riesgoso"'),
-    ('ahorro_neto_min_pct',        3,  'Porcentaje mínimo de ahorro neto para considerarse una "oportunidad detectada"');
+    ('ahorro_neto_min_pct',        3,  'Porcentaje mínimo de ahorro neto para considerarse una "oportunidad detectada"'),
+    ('abc_clase_a_pct',           80,  'Porcentaje acumulado máximo para clasificar un producto como clase A'),
+    ('abc_clase_b_pct',           95,  'Porcentaje acumulado máximo para clasificar un producto como clase B (por encima de este valor es clase C)'),
+    ('demanda_ventana_default',    6,  'Número de periodos más recientes a promediar en la estimación de demanda (promedio móvil)');
 
 -- ------------------------------------------------------------
 -- Índices de apoyo para las consultas más frecuentes
