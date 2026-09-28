@@ -39,6 +39,12 @@ aspectos a revisar antes de cerrar el MVP.
       - Ajustar el `stock_actual` de algún producto para que
         `stock_actual <= stock_seguridad`.
 
+- [ ] **Orden lógico de criterios al leer de Supabase** (menor)
+      - La tabla no guarda el orden lógico de los criterios.
+      - El frontend debe ordenar por criterio con un CASE, o se añade un
+        campo `orden_criterio` a `evaluaciones_criterios`.
+      - Revisar cuando se implemente el panel de explicabilidad (fase 6).
+
 ## Resueltos
 
 - [x] **Unificar validación de columnas entre módulos del motor**
@@ -95,13 +101,18 @@ aspectos a revisar antes de cerrar el MVP.
 
 ## Notas de integración
 
-- **Verificación end-to-end exitosa**: el recomendador funciona con los
-  datos reales del seed. Se generaron 6 recomendaciones:
+- **Verificación end-to-end exitosa (recomendador)**: el recomendador
+  funciona con los datos reales del seed. Se generaron 6 recomendaciones:
   - Atención: 1 (SEED_Engrane G7)
   - Sin riesgo: 5
   - Crítico: 0
   - Con "Ahorro detectado": 2 (Engrane G7, Tornillo M3)
   - Suma total de ahorro neto: $1,869.75
+
+- **Verificación end-to-end completa (recomendador + evaluador)**: el
+  flujo completo funciona con datos reales. Se generan:
+  - 6 recomendaciones (una por producto del seed).
+  - 36 evaluaciones (6 recomendaciones × 6 criterios).
 
 - **Discrepancias entre diseño del seed y resultados reales**: las clases
   ABC/XYZ calculadas por el motor no coinciden exactamente con las que se
@@ -110,6 +121,12 @@ aspectos a revisar antes de cerrar el MVP.
 
 - **Ninguna recomendación cae en "Crítico"**: era esperado con los stocks
   actuales del seed. Documentado en deuda técnica.
+
+- **Orden de los criterios en la tabla**: al insertar en
+  `evaluaciones_criterios`, el orden lógico (`ORDEN_CRITERIOS`) se pierde.
+  El dashboard de Supabase los muestra en orden arbitrario (a veces
+  alfabético). Si el frontend quiere mostrarlos en orden lógico, debe
+  hacer un ORDER BY con CASE o guardar un campo `orden_criterio`.
 
 ## Casos conocidos y documentados
 
