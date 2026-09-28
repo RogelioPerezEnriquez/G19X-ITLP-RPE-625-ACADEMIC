@@ -5,18 +5,30 @@ aspectos a revisar antes de cerrar el MVP.
 
 ## Deuda técnica
 
-- [ ] **Extraer umbrales y parámetros a `parametros_configuracion`** (fase 4)
-      - `abc.py`: `UMBRAL_CLASE_A`, `UMBRAL_CLASE_B`.
-      - `xyz.py`: `UMBRAL_X`, `UMBRAL_Y`.
-      - `demanda.py`: `VENTANA_DEFAULT`.
-      - `eoq_rop.py`: `PERIODOS_POR_AÑO_DEFAULT`, `DIAS_POR_PERIODO_DEFAULT`,
-        `MARGEN_SEGURIDAD_PCT_DEFAULT`.
-      - `proveedor.py`: `UMBRAL_CONFIABLE`, `UMBRAL_RIESGOSO`,
-        `PESO_CUMPLIMIENTO`, `PESO_CALIDAD`.
-      - `ahorro.py`: `UMBRAL_AHORRO_PCT_DEFAULT`, `PERIODOS_POR_AÑO_DEFAULT`.
-      - `recomendador.py`: `ORDEN_URGENCIA`, `URGENCIA_*` (los valores de
-        estado se podrían mantener como constantes).
-      - Deberán leerse desde Supabase en la fase 4.
+- [ ] **Configurabilidad completa de parámetros**
+      - ACTUALIZADO: la tabla `parametros_configuracion` tiene 10 filas.
+        Los parámetros configurables son: `abc_clase_a_pct`, `abc_clase_b_pct`,
+        `ahorro_neto_min_pct`, `cv_confianza_alta`, `cv_confianza_media`,
+        `demanda_ventana_default`, `eoq_max_pct`, `eoq_min_pct`,
+        `score_proveedor_confiable`, `score_proveedor_riesgoso`.
+      - Los siguientes parámetros NO están en la tabla y por decisión de
+        alcance siguen hardcodeados:
+        - `eoq_rop.py`: `PERIODOS_POR_AÑO_DEFAULT`, `DIAS_POR_PERIODO_DEFAULT`,
+          `MARGEN_SEGURIDAD_PCT_DEFAULT`.
+        - `proveedor.py`: `PESO_CUMPLIMIENTO`, `PESO_CALIDAD`.
+        - `xyz.py`: `MIN_PERIODOS`.
+        - `recomendador.py`: `URGENCIA_*`.
+      - Si en el futuro se quiere configurabilidad total, añadir esos
+        parámetros a la tabla.
+
+- [ ] **Conversión de unidades al pasar parámetros a los módulos**
+      - `eoq_min_pct` y `eoq_max_pct` están en % (90, 110) pero el
+        `evaluador.py` espera fracción (0.90, 1.10). El consumidor debe
+        dividir por 100.
+      - `demanda_ventana_default` llega como float (6.0) pero `demanda.py`
+        espera int. El consumidor debe convertir con `int(...)`.
+      - Resolver en el `recomendador.py` cuando lea los parámetros.
+      - Documentado en el docstring de `config.py`.
 
 - [ ] **Validar `float('inf')` en `ahorro.py`** (menor)
       - Actualmente `umbral_ahorro_pct = float('inf')` pasa la validación
@@ -43,7 +55,7 @@ aspectos a revisar antes de cerrar el MVP.
       - La tabla no guarda el orden lógico de los criterios.
       - El frontend debe ordenar por criterio con un CASE, o se añade un
         campo `orden_criterio` a `evaluaciones_criterios`.
-      - Revisar cuando se implemente el panel de explicabilidad (fase 6).
+      - Revisar cuando se implemente el panel de explicabilidad.
 
 ## Resueltos
 
@@ -98,6 +110,27 @@ aspectos a revisar antes de cerrar el MVP.
   - No tienen historial o tienen < 2 periodos.
   - No tienen ningún proveedor en `producto_proveedor`.
   - Tienen `cv_demanda` no calculable (demanda media cero).
+
+## Notas de configurabilidad
+
+- **`config.py` es el único punto de entrada de parámetros.** Ningún módulo
+  del motor lee directamente de Supabase. El `recomendador.py` carga los
+  parámetros y los pasa a cada módulo como argumento.
+
+- **`PARAMETROS_DEFAULT` es la fuente única de verdad de los defaults.**
+  Los módulos importan de aquí.
+
+- **`cargar_parametros` valida que estén los 10 parámetros.** Si falta
+  alguno, lanza `ValueError`.
+
+- **Unidades**: los `*_pct` están en porcentaje. `eoq_min_pct` y
+  `eoq_max_pct` requieren conversión a fracción (÷100) antes de pasarlos
+  al evaluador. `demanda_ventana_default` requiere conversión a int antes
+  de pasarlo a `demanda.py`.
+
+- **`cargar_parametros` no filtra claves extra**: si la tabla trae
+  parámetros nuevos que no están en `PARAMETROS_DEFAULT`, se devuelven
+  también. Esto permite añadir parámetros a la tabla sin tocar `config.py`.
 
 ## Notas de integración
 
