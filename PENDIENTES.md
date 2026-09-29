@@ -11,7 +11,8 @@ aspectos a revisar antes de cerrar el MVP.
       - Revisar cuando terminen los 5 módulos del motor (abc, xyz,
         demanda, proveedor, ahorro).
       - Líneas afectadas: `config.py:51` (docstring), `config.py:78`
-        (encabezado del comentario).
+        (encabezado del comentario), `config.py:84` (referencia a
+        `VENTANA_DEFAULT` que ya no existe).
 
 - [ ] **Configurabilidad completa de parámetros** (post-MVP)
       - La tabla `parametros_configuracion` tiene 10 filas.
@@ -123,8 +124,9 @@ aspectos a revisar antes de cerrar el MVP.
   configurabilidad, los módulos del motor reciben sus umbrales como
   parámetros con defaults importados de `config.PARAMETROS_DEFAULT`.
   Estado actual:
-  - ✅ `abc.py`: parametrizado (umbral_clase_a, umbral_clase_b).
-  - ⏳ `demanda.py`, `proveedor.py`, `xyz.py`, `ahorro.py`: pendientes.
+  - ✅ `abc.py`: parametrizado (`umbral_clase_a`, `umbral_clase_b`).
+  - ✅ `demanda.py`: parametrizado (`ventana`, con cast a int).
+  - ⏳ `proveedor.py`, `xyz.py`, `ahorro.py`: pendientes.
   - No aplica a `eoq_rop.py` (sus parámetros no están en la tabla).
 
 ## Notas de configurabilidad
