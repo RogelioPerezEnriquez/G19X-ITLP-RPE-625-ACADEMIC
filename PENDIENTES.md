@@ -5,8 +5,16 @@ aspectos a revisar antes de cerrar el MVP.
 
 ## Deuda técnica
 
-- [ ] **Configurabilidad completa de parámetros**
-      - ACTUALIZADO: la tabla `parametros_configuracion` tiene 10 filas.
+- [ ] **Actualizar referencias en `config.py` al finalizar la parametrización**
+      - Frases que mencionan "constantes homólogas en el motor" quedarán
+        obsoletas cuando todos los módulos estén parametrizados.
+      - Revisar cuando terminen los 5 módulos del motor (abc, xyz,
+        demanda, proveedor, ahorro).
+      - Líneas afectadas: `config.py:51` (docstring), `config.py:78`
+        (encabezado del comentario).
+
+- [ ] **Configurabilidad completa de parámetros** (post-MVP)
+      - La tabla `parametros_configuracion` tiene 10 filas.
         Los parámetros configurables son: `abc_clase_a_pct`, `abc_clase_b_pct`,
         `ahorro_neto_min_pct`, `cv_confianza_alta`, `cv_confianza_media`,
         `demanda_ventana_default`, `eoq_max_pct`, `eoq_min_pct`,
@@ -110,6 +118,14 @@ aspectos a revisar antes de cerrar el MVP.
   - No tienen historial o tienen < 2 periodos.
   - No tienen ningún proveedor en `producto_proveedor`.
   - Tienen `cv_demanda` no calculable (demanda media cero).
+
+- **Parametrización de módulos del motor**: a partir de la fase de
+  configurabilidad, los módulos del motor reciben sus umbrales como
+  parámetros con defaults importados de `config.PARAMETROS_DEFAULT`.
+  Estado actual:
+  - ✅ `abc.py`: parametrizado (umbral_clase_a, umbral_clase_b).
+  - ⏳ `demanda.py`, `proveedor.py`, `xyz.py`, `ahorro.py`: pendientes.
+  - No aplica a `eoq_rop.py` (sus parámetros no están en la tabla).
 
 ## Notas de configurabilidad
 
