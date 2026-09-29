@@ -9,10 +9,26 @@ aspectos a revisar antes de cerrar el MVP.
       - Frases que mencionan "constantes homólogas en el motor" quedarán
         obsoletas cuando todos los módulos estén parametrizados.
       - Revisar cuando terminen los 5 módulos del motor (abc, xyz,
-        demanda, proveedor, ahorro).
+        demanda, proveedor, ahorro) y el evaluador.
       - Líneas afectadas: `config.py:51` (docstring), `config.py:78`
         (encabezado del comentario), `config.py:84` (referencia a
-        `VENTANA_DEFAULT` que ya no existe).
+        `VENTANA_DEFAULT` que ya no existe), `config.py:87-88`
+        (referencias a `UMBRAL_CONFIABLE`/`UMBRAL_RIESGOSO`).
+
+- [ ] **Duplicación de umbrales entre `evaluador.py` y `PARAMETROS_DEFAULT`**
+      - `evaluador.py` mantiene constantes locales que duplican los valores
+        de `PARAMETROS_DEFAULT`:
+        - `SCORE_CONFIABLE = 80.0` (duplica `score_proveedor_confiable`)
+        - `SCORE_RIESGOSO = 60.0` (duplica `score_proveedor_riesgoso`)
+        - `RATIO_MIN = 0.90` (duplica `eoq_min_pct / 100`)
+        - `RATIO_MAX = 1.10` (duplica `eoq_max_pct / 100`)
+        - `CV_ALTA = 0.5` (duplica `cv_confianza_alta`)
+        - `CV_MODERADA = 1.0` (duplica `cv_confianza_media`)
+        - `AHORRO_PCT = 0.03` (duplica `ahorro_neto_min_pct / 100`)
+      - Cuando se parametrice `evaluador.py`, eliminar estas constantes
+        y recibir los umbrales como parámetros.
+      - Comentario obsoleto en `evaluador.py` (~línea 177): "los mismos
+        cortes que UMBRAL_CONFIABLE y UMBRAL_RIESGOSO".
 
 - [ ] **Configurabilidad completa de parámetros** (post-MVP)
       - La tabla `parametros_configuracion` tiene 10 filas.
@@ -126,7 +142,8 @@ aspectos a revisar antes de cerrar el MVP.
   Estado actual:
   - ✅ `abc.py`: parametrizado (`umbral_clase_a`, `umbral_clase_b`).
   - ✅ `demanda.py`: parametrizado (`ventana`, con cast a int).
-  - ⏳ `proveedor.py`, `xyz.py`, `ahorro.py`: pendientes.
+  - ✅ `proveedor.py`: parametrizado (`umbral_confiable`, `umbral_riesgoso`).
+  - ⏳ `xyz.py`, `ahorro.py`: pendientes.
   - No aplica a `eoq_rop.py` (sus parámetros no están en la tabla).
 
 ## Notas de configurabilidad
