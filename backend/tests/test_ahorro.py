@@ -2,20 +2,33 @@
 
 Solo pruebas de la función pura ``src.motor.ahorro.calcular_ahorro``: no se toca
 red, base de datos ni archivos.
+
+El umbral de decisión ya no es una constante del módulo
+(``UMBRAL_AHORRO_PCT_DEFAULT`` se eliminó al parametrizar el módulo en la fase
+4): los tests lo leen de la firma de ``calcular_ahorro``, que a su vez lo lee de
+:data:`src.config.PARAMETROS_DEFAULT`.
 """
+
+import inspect
 
 import pandas as pd
 import pytest
 
+from src.config import PARAMETROS_DEFAULT
 from src.motor.ahorro import (
     COLUMNAS_REQUERIDAS,
     ESTADO_AHORRO,
     ESTADO_SIN_OPORTUNIDAD,
     PERIODOS_POR_AÑO_DEFAULT,
     TOLERANCIA_AHORRO,
-    UMBRAL_AHORRO_PCT_DEFAULT,
     calcular_ahorro,
 )
+
+# Umbral por defecto del motor, leído de la propia firma: los tests de fronteras
+# se refieren así al default real que usa calcular_ahorro y no a una copia local
+# del valor (mismo criterio que test_xyz.py, test_demanda.py y test_proveedor.py).
+_FIRMA = inspect.signature(calcular_ahorro).parameters
+UMBRAL_AHORRO_PCT_DEFAULT: float = _FIRMA["umbral_ahorro_pct"].default
 
 
 # ---------------------------------------------------------------- utilidades
@@ -147,7 +160,7 @@ def _mapa_estados(resultado: pd.DataFrame) -> dict:
 
 
 def test_las_constantes_del_modulo_son_las_esperadas():
-    """Umbral, periodos, tolerancia, columnas y etiquetas quedan fijados."""
+    """Umbral (de la firma), periodos, tolerancia, columnas y etiquetas, fijos."""
     assert UMBRAL_AHORRO_PCT_DEFAULT == 3.0
     assert PERIODOS_POR_AÑO_DEFAULT == 12
     assert TOLERANCIA_AHORRO == 1e-9
@@ -659,3 +672,166 @@ def test_dtypes_de_la_salida():
     assert str(resultado["estado"].dtype) == "object"
     assert all(isinstance(valor, str) for valor in resultado["estado"])
     assert set(resultado["estado"]) <= {ESTADO_AHORRO, ESTADO_SIN_OPORTUNIDAD}
+
+
+# ------------------------------------------- umbral configurable (fase 4)
+
+
+def test_los_defaults_del_umbral_vienen_de_config():
+    """Sin argumentos se usa el umbral de PARAMETROS_DEFAULT (3.0, en %)."""
+    parametros = inspect.signature(calcular_ahorro).parameters
+
+    assert parametros["umbral_ahorro_pct"].default == (
+        PARAMETROS_DEFAULT["ahorro_neto_min_pct"]
+    )
+    # Y el valor de config sigue siendo el histórico del módulo.
+    assert PARAMETROS_DEFAULT["ahorro_neto_min_pct"] == 3.0
+
+
+def test_el_default_de_umbral_ahorro_pct_es_3_0_leido_de_la_firma():
+    """El default de `umbral_ahorro_pct` es 3.0, leído de la firma."""
+    parametro = inspect.signature(calcular_ahorro).parameters["umbral_ahorro_pct"]
+
+    assert parametro.default == 3.0
+    assert parametro.default == PARAMETROS_DEFAULT["ahorro_neto_min_pct"]
+    assert isinstance(parametro.default, float)
+    assert not isinstance(parametro.default, bool)
+    assert parametro.annotation is float
+
+
+def test_sin_umbral_equivale_a_pasar_el_default_de_config():
+    """No pasar umbral equivale a pasar 3.0: nada cambió por defecto."""
+    entrada = _con_casos(
+        ["P001", "P002", "P003", "P004"], [_P001, _P002, _P003, _P004]
+    )
+
+    pd.testing.assert_frame_equal(
+        calcular_ahorro(entrada),
+        calcular_ahorro(
+            entrada, umbral_ahorro_pct=PARAMETROS_DEFAULT["ahorro_neto_min_pct"]
+        ),
+    )
+
+
+def test_umbral_custom_1_0_detecta_un_ahorro_del_2_pct_del_pedido():
+    """Un ahorro del 2 % del pedido: sin oportunidad con 3 %, detectado con 1 %.
+
+    precio 10.00, EOQ 600 >= umbral 300 (no se sube el pedido), descuento 2 %:
+    ahorro_neto = 600 * 10.00 * 0.02 = 120.00 = 2 % de 6000.00
+    con el default (3.0) -> umbral 180.00 -> 120.00 < 180.00 -> sin oportunidad
+    con umbral_ahorro_pct = 1.0 -> umbral 60.00 -> 120.00 >= 60.00 -> detectado.
+    """
+    entrada = _uno(10.0, 600.0, 300.0, 2.0, 5.0, 20.0)
+
+    por_defecto = calcular_ahorro(entrada)
+    custom = calcular_ahorro(entrada, umbral_ahorro_pct=1.0)
+
+    assert _valor(por_defecto, "P001", "ahorro_neto") == pytest.approx(120.00)
+    assert _valor(por_defecto, "P001", "ahorro_neto") == pytest.approx(
+        0.02 * 600.0 * 10.0
+    )
+    assert _estado(por_defecto, "P001") == ESTADO_SIN_OPORTUNIDAD
+    assert _estado(custom, "P001") == ESTADO_AHORRO
+    # El umbral solo mueve la clasificación: los números no cambian.
+    assert _valor(custom, "P001", "ahorro_neto") == _valor(
+        por_defecto, "P001", "ahorro_neto"
+    )
+    assert _valor(custom, "P001", "cantidad_pedido") == pytest.approx(600.0)
+
+
+def test_umbral_custom_10_0_descarta_un_ahorro_del_5_pct_del_pedido():
+    """Un ahorro del 5 %: detectado con 3 %, sin oportunidad con 10 %.
+
+    precio 20.00, EOQ 400 >= umbral 200 (no se sube el pedido), descuento 5 %:
+    ahorro_neto = 400 * 20.00 * 0.05 = 400.00 = 5 % de 8000.00
+    con el default (3.0) -> umbral 240.00 -> 400.00 >= 240.00 -> detectado
+    con umbral_ahorro_pct = 10.0 -> umbral 800.00 -> 400.00 < 800.00 -> sin
+    oportunidad.
+    """
+    entrada = _uno(20.0, 400.0, 200.0, 5.0, 8.0, 25.0)
+
+    por_defecto = calcular_ahorro(entrada)
+    custom = calcular_ahorro(entrada, umbral_ahorro_pct=10.0)
+
+    assert _valor(por_defecto, "P001", "ahorro_neto") == pytest.approx(400.00)
+    assert _valor(por_defecto, "P001", "ahorro_neto") == pytest.approx(
+        0.05 * 400.0 * 20.0
+    )
+    assert _estado(por_defecto, "P001") == ESTADO_AHORRO
+    assert _estado(custom, "P001") == ESTADO_SIN_OPORTUNIDAD
+    assert _valor(custom, "P001", "cantidad_pedido") == pytest.approx(400.0)
+
+
+def test_umbral_custom_0_0_detecta_todo_ahorro_neto_no_negativo():
+    """Con umbral 0 el criterio es "no perder dinero": 120.00 y 0 pasan, -50 no.
+
+    P005 (descuento del 2 % con EOQ >= umbral: no se sube el pedido) tiene
+    ahorro_neto = 120.00; P003 (sin descuento) tiene 0.00; P004 (descuento
+    declarado del 0 %, que sube el pedido) tiene -50.00.
+    """
+    p005: dict = {
+        "precio_unitario": 10.0,
+        "cantidad_umbral_descuento": 300.0,
+        "descuento_pct": 2.0,
+        "cantidad_eoq": 600.0,
+        "costo_unitario": 5.0,
+        "costo_mantener_pct_anual": 20.0,
+    }
+    entrada = _con_casos(["P005", "P003", "P004"], [p005, _P003, _P004])
+
+    custom = calcular_ahorro(entrada, umbral_ahorro_pct=0.0)
+    por_defecto = calcular_ahorro(entrada)
+
+    assert _mapa_estados(custom) == {
+        "P003": ESTADO_AHORRO,
+        "P004": ESTADO_SIN_OPORTUNIDAD,
+        "P005": ESTADO_AHORRO,
+    }
+    assert _valor(custom, "P005", "ahorro_neto") == pytest.approx(120.00)
+    assert _valor(custom, "P003", "ahorro_neto") == 0.0
+    assert _valor(custom, "P004", "ahorro_neto") == pytest.approx(-50.00)
+
+    # Con el default (3 %) el mismo lote vuelve a perder las dos oportunidades.
+    assert _estado(por_defecto, "P005") == ESTADO_SIN_OPORTUNIDAD
+    assert _estado(por_defecto, "P003") == ESTADO_SIN_OPORTUNIDAD
+
+
+def test_umbral_custom_respeta_la_frontera_exacta_y_la_tolerancia():
+    """El corte inclusivo y TOLERANCIA_AHORRO siguen aplicando con umbral custom.
+
+    precio 10.00, EOQ 500 >= umbral 100, descuento 4 %:
+    ahorro_neto = 500 * 10.00 * 0.04 = 200.00
+    umbral 4.0 -> 5000.00 * 0.04 = 200.00 (frontera exacta) -> detectado
+    umbral 4.0001 -> 200.005: la brecha (0.005) supera TOLERANCIA_AHORRO -> sin
+    oportunidad.
+    """
+    entrada = _uno(10.0, 500.0, 100.0, 4.0, 5.0, 20.0)
+
+    exacto = calcular_ahorro(entrada, umbral_ahorro_pct=4.0)
+    apenas_mayor = calcular_ahorro(entrada, umbral_ahorro_pct=4.0001)
+
+    assert _valor(exacto, "P001", "ahorro_neto") == 200.0
+    assert _valor(exacto, "P001", "ahorro_neto") == 500.0 * 10.0 * (4.0 / 100.0)
+    assert _estado(exacto, "P001") == ESTADO_AHORRO
+    assert _valor(apenas_mayor, "P001", "ahorro_neto") == 200.0
+    assert 5000.0 * (4.0001 / 100.0) - 200.0 > TOLERANCIA_AHORRO
+    assert _estado(apenas_mayor, "P001") == ESTADO_SIN_OPORTUNIDAD
+
+
+def test_el_umbral_se_usa_como_porcentaje_y_no_como_fraccion():
+    """0.03 no equivale a 3 %: el umbral se divide entre 100 dentro de la función.
+
+    precio 10.00, EOQ 500 >= umbral 100, descuento 1 %:
+    ahorro_neto = 500 * 10.00 * 0.01 = 50.00 = 1 % de 5000.00
+    con el default (3.0 = 3 %) -> umbral 150.00 -> sin oportunidad
+    con 0.03 (que como fracción sería 3 %) -> umbral 1.50 -> detectado.
+    """
+    entrada = _uno(10.0, 500.0, 100.0, 1.0, 5.0, 20.0)
+
+    por_defecto = calcular_ahorro(entrada)
+    con_fraccion_implicita = calcular_ahorro(entrada, umbral_ahorro_pct=0.03)
+
+    assert _valor(por_defecto, "P001", "ahorro_neto") == pytest.approx(50.00)
+    assert _estado(por_defecto, "P001") == ESTADO_SIN_OPORTUNIDAD
+    assert _estado(con_fraccion_implicita, "P001") == ESTADO_AHORRO
+

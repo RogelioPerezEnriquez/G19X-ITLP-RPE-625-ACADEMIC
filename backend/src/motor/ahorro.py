@@ -96,17 +96,33 @@ mantener se prorratea a un periodo dividiéndolo entre ``periodos_por_año``,
 coherente con la nota de implementación del PRD que asume el exceso mantenido un
 periodo completo.
 
-Los umbrales, el número de periodos por año y las etiquetas viven en constantes
-de módulo (:data:`UMBRAL_AHORRO_PCT_DEFAULT`, :data:`PERIODOS_POR_AÑO_DEFAULT`,
-:data:`ESTADO_AHORRO`, :data:`ESTADO_SIN_OPORTUNIDAD`) como fuente única de
-verdad: cuando el MVP incorpore ``parametros_configuracion``,
-``ahorro_neto_min_pct`` = 3 será el valor por defecto de ``umbral_ahorro_pct``.
+El umbral de decisión es un parámetro de :func:`calcular_ahorro` y su valor por
+defecto se lee de :data:`src.config.PARAMETROS_DEFAULT`
+(``ahorro_neto_min_pct`` = 3.0), la fuente única de verdad de la tabla
+``parametros_configuracion`` (db/schema.sql); este módulo no guarda una copia
+local del valor. La parametrización no cambia la unidad: el umbral sigue siendo
+un **porcentaje** del costo total del pedido (3.0 es 3 %, no 0.03), así que
+dentro de la función se divide entre 100 igual que los demás ``*_pct`` del
+motor.
+
+El número de periodos por año y las etiquetas de estado siguen viviendo en
+constantes de módulo (:data:`PERIODOS_POR_AÑO_DEFAULT`,
+:data:`ESTADO_AHORRO` y :data:`ESTADO_SIN_OPORTUNIDAD`): no están en la tabla de
+configuración, así que no son parámetros configurables y se quedan como fuente
+única de verdad de sus valores.
+
+El orden de los parámetros de :func:`calcular_ahorro` es el histórico
+(``datos``, ``umbral_ahorro_pct``, ``periodos_por_año``): parametrizar el umbral
+no mueve ninguna posición, de modo que las llamadas posicionales existentes
+siguen funcionando igual (ver Notas del docstring de la función).
 """
 
 import math
 
 import numpy as np
 import pandas as pd
+
+from src.config import PARAMETROS_DEFAULT
 
 __all__ = ["calcular_ahorro"]
 
@@ -129,15 +145,19 @@ COLUMNAS_REQUERIDAS: tuple[str, ...] = (
 # inventario a un solo periodo. Mismo default, mismo nombre y mismo significado
 # que en eoq_rop.py, para que los dos módulos midan el tiempo en las mismas
 # unidades: con 12 (periodos mensuales) el costo extra es una doceava parte del
-# anual. Fuente única de verdad: cuando el MVP incorpore la tabla de
-# configuración, este será su valor por defecto.
+# anual. Esta constante sigue siendo la fuente única de verdad del valor: el
+# número de periodos por año no está en la tabla de configuración, así que no es
+# un parámetro configurable (a diferencia del umbral de ahorro), igual que en
+# eoq_rop.py.
 PERIODOS_POR_AÑO_DEFAULT: int = 12
 
-# Porcentaje mínimo del costo total del pedido que debe representar el ahorro
-# neto para considerarse "Ahorro detectado". Fuente única de verdad: cuando el
-# MVP incorpore la tabla de configuración, este será su valor por defecto
-# (db/schema.sql: ahorro_neto_min_pct = 3).
-UMBRAL_AHORRO_PCT_DEFAULT: float = 3.0
+# El umbral de decisión no vive aquí: es un parámetro de :func:`calcular_ahorro`
+# y su fuente única de verdad es src.config.PARAMETROS_DEFAULT
+# ('ahorro_neto_min_pct' = 3.0), de donde se lee el default de la firma. No se
+# guarda una copia local del valor, para que un cambio de configuración se
+# haga en un solo lugar (mismo criterio que abc.py, xyz.py, demanda.py y
+# proveedor.py al parametrizarse). Ojo con la unidad: el valor está en
+# porcentaje (3.0 = 3 %), igual que la constante que sustituye.
 
 # Tolerancia al comparar el ahorro neto con el umbral de decisión. Absorbe el
 # ruido de punto flotante en fronteras exactas (p. ej. un ahorro neto
@@ -155,7 +175,7 @@ ESTADO_SIN_OPORTUNIDAD: str = "Sin oportunidad adicional"
 
 def calcular_ahorro(
     datos: pd.DataFrame,
-    umbral_ahorro_pct: float = UMBRAL_AHORRO_PCT_DEFAULT,
+    umbral_ahorro_pct: float = PARAMETROS_DEFAULT["ahorro_neto_min_pct"],
     periodos_por_año: int = PERIODOS_POR_AÑO_DEFAULT,
 ) -> pd.DataFrame:
     """
@@ -174,11 +194,18 @@ def calcular_ahorro(
             - costo_mantener_pct_anual: % anual de mantener (float >= 0)
         umbral_ahorro_pct: porcentaje mínimo del costo total del pedido que
             debe representar el ahorro neto para considerarse "Ahorro
-            detectado". Default 3.0 (3%). Debe ser un número >= 0 (no NaN).
+            detectado". Se expresa en **porcentaje**, no en fracción: 3.0 es
+            3 % (no 0.03), y por eso dentro de la función se divide entre 100
+            (``umbral_ahorro = costo_total_pedido * (umbral_ahorro_pct / 100)``).
+            Default 3.0, leído de
+            ``config.PARAMETROS_DEFAULT["ahorro_neto_min_pct"]`` (fuente única
+            de verdad: ``parametros_configuracion``, db/schema.sql). Debe ser
+            un número >= 0 (no NaN).
         periodos_por_año: periodos que tiene un año, para prorratear el costo
             de mantener el exceso de inventario a un solo periodo. Default 12
             (periodos mensuales), igual que en eoq_rop.py. Debe ser un entero
-            positivo.
+            positivo. No es un parámetro configurable: no está en la tabla de
+            configuración y vive en :data:`PERIODOS_POR_AÑO_DEFAULT`.
 
     Returns:
         DataFrame con una fila por producto, con columnas:
@@ -222,6 +249,20 @@ def calcular_ahorro(
         - La salida es un DataFrame nuevo, con RangeIndex desde 0.
         - Se asume que los datos cumplen los rangos del schema; no se
           validan rangos aquí.
+        - El umbral es un parámetro con default: quien no lo pase obtiene
+          exactamente el comportamiento histórico (3 % del costo del pedido),
+          porque su default se lee de :data:`src.config.PARAMETROS_DEFAULT` y
+          este módulo no guarda copias locales del valor.
+        - El umbral se interpreta en porcentaje (3.0 = 3 %), no en fracción:
+          pasar 0.03 equivale a exigir un 0.03 % del costo del pedido, no un
+          3 % (con 0.03 casi cualquier ahorro neto positivo se clasifica como
+          "Ahorro detectado"). Es el mismo contrato de ``descuento_pct`` y
+          ``costo_mantener_pct_anual``, que también llegan como porcentaje.
+        - La firma mantiene el orden histórico de sus parámetros (``datos``,
+          ``umbral_ahorro_pct``, ``periodos_por_año``): el umbral ya ocupaba la
+          segunda posición, así que un llamador que lo pase posicionalmente
+          (``calcular_ahorro(datos, 5.0)``) sigue funcionando igual; no se
+          reordena la firma para no romper llamadas existentes.
         - Orden de ejecución: (1) validar los parámetros escalares (el umbral y
           periodos_por_año, en el orden de la firma), (2) validar columnas,
           (3) si está vacío devolver vacío, (4) si hay filas calcular.
@@ -330,7 +371,10 @@ def calcular_ahorro(
 
     ahorro_neto: np.ndarray = ahorro_bruto - costo_extra_mantener
 
-    # Base del umbral de decisión: el costo del pedido sugerido.
+    # Base del umbral de decisión: el costo del pedido sugerido. El umbral llega
+    # en PORCENTAJE (3.0 = 3 %), así que aquí se divide entre 100 igual que
+    # descuento_pct y costo_mantener_pct: la parametrización del módulo no
+    # cambió la unidad del parámetro.
     costo_total_pedido: np.ndarray = cantidad_pedido * precio_unitario
     umbral_ahorro: np.ndarray = costo_total_pedido * (umbral_ahorro_pct / 100.0)
 
