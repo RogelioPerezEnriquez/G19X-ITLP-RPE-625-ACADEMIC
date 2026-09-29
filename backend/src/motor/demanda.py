@@ -25,12 +25,15 @@ ventana, y un producto con menos periodos que ``ventana`` se promedia con todo
 lo que tenga (no se excluye). El resultado no depende del orden de las filas de
 entrada.
 
-El tamaño de la ventana vive en una constante de módulo
-(:data:`VENTANA_DEFAULT`) como fuente única de verdad: cuando el MVP incorpore
-la tabla de configuración, ese será su valor por defecto.
+El tamaño de la ventana es un parámetro de :func:`estimar_demanda` y su valor
+por defecto viene de :data:`src.config.PARAMETROS_DEFAULT`
+(``demanda_ventana_default``, 6.0), que es la fuente única de verdad: cuando el
+MVP incorpore la tabla de configuración, de ahí saldrá su valor.
 """
 
 import pandas as pd
+
+from src.config import PARAMETROS_DEFAULT
 
 __all__ = ["estimar_demanda"]
 
@@ -41,15 +44,16 @@ COLUMNAS_REQUERIDAS: tuple[str, ...] = (
     "cantidad_demandada",
 )
 
-# Número de periodos más recientes que se promedian por defecto. Fuente única
-# de verdad: cuando el MVP incorpore la tabla de configuración, este será su
-# valor por defecto.
-VENTANA_DEFAULT: int = 6
+# El tamaño de la ventana (número de periodos más recientes que se promedian)
+# no vive aquí: es un parámetro de :func:`estimar_demanda` y su fuente única de
+# verdad es src.config.PARAMETROS_DEFAULT ('demanda_ventana_default' = 6.0), de
+# donde se lee el default de la firma. El cast a int() es explícito porque
+# config devuelve todos los parámetros como float y 'ventana' debe ser int.
 
 
 def estimar_demanda(
     historial: pd.DataFrame,
-    ventana: int = VENTANA_DEFAULT,
+    ventana: int = int(PARAMETROS_DEFAULT["demanda_ventana_default"]),
 ) -> pd.DataFrame:
     """
     Estima la demanda por periodo para cada producto usando promedio móvil.
@@ -60,9 +64,11 @@ def estimar_demanda(
             - producto_id: identificador único del producto
             - periodo: fecha del periodo (parseable como datetime)
             - cantidad_demandada: cantidad demandada (float >= 0)
-        ventana: número de periodos más recientes a promediar. Default 6.
-            Debe ser un entero positivo. Si un producto tiene menos periodos
-            que `ventana`, se promedian todos los disponibles.
+        ventana: número de periodos más recientes a promediar, como int. Default
+            6 (``config.PARAMETROS_DEFAULT['demanda_ventana_default']``, 6.0,
+            convertido a int en la propia firma). Debe ser un entero positivo.
+            Si un producto tiene menos periodos que `ventana`, se promedian
+            todos los disponibles.
 
     Returns:
         DataFrame con una fila por producto, con columnas:
@@ -97,6 +103,11 @@ def estimar_demanda(
           las columnas antes que el atajo por DataFrame vacío, de modo que las
           reglas "ventana inválida" y "columnas faltantes" se cumplen siempre,
           tenga o no filas la entrada.
+        - El default de `ventana` se lee de
+          :data:`src.config.PARAMETROS_DEFAULT` con ``int()`` en la propia
+          firma: config devuelve los parámetros como float (6.0) y la validación
+          de `ventana` exige un int. Es un cambio de fuente, no de valor: el
+          default sigue siendo 6.
 
     Raises:
         ValueError: si al DataFrame le falta alguna columna requerida
