@@ -11,9 +11,9 @@ aspectos a revisar antes de cerrar el MVP.
       - Revisar cuando terminen los 5 módulos del motor (abc, xyz,
         demanda, proveedor, ahorro) y el evaluador.
       - Líneas afectadas: `config.py:51` (docstring), `config.py:78`
-        (encabezado del comentario), `config.py:84` (referencia a
-        `VENTANA_DEFAULT` que ya no existe), `config.py:87-88`
-        (referencias a `UMBRAL_CONFIABLE`/`UMBRAL_RIESGOSO`).
+        (encabezado del comentario), `config.py:82-84` (referencias a
+        `UMBRAL_X`/`UMBRAL_Y`/`VENTANA_DEFAULT` que ya no existen),
+        `config.py:87-88` (referencias a `UMBRAL_CONFIABLE`/`UMBRAL_RIESGOSO`).
 
 - [ ] **Duplicación de umbrales entre `evaluador.py` y `PARAMETROS_DEFAULT`**
       - `evaluador.py` mantiene constantes locales que duplican los valores
@@ -27,8 +27,21 @@ aspectos a revisar antes de cerrar el MVP.
         - `AHORRO_PCT = 0.03` (duplica `ahorro_neto_min_pct / 100`)
       - Cuando se parametrice `evaluador.py`, eliminar estas constantes
         y recibir los umbrales como parámetros.
-      - Comentario obsoleto en `evaluador.py` (~línea 177): "los mismos
-        cortes que UMBRAL_CONFIABLE y UMBRAL_RIESGOSO".
+      - Comentarios obsoletos: `evaluador.py:172-173` (mencionan
+        `UMBRAL_X`/`UMBRAL_Y`).
+
+- [ ] **Coherencia de umbrales entre `xyz.py` y `evaluador.py`**
+      - Los umbrales `cv_confianza_alta` y `cv_confianza_media` son usados
+        por dos módulos para dos propósitos distintos:
+        - `xyz.py`: clasificación X/Y/Z.
+        - `evaluador.py`: criterio 3 (confianza en la demanda).
+      - Hasta ahora los valores coincidían porque ambos tenían los mismos
+        hardcodeados. Con la parametrización de `xyz.py`, un cambio en
+        `config.py` **solo afecta a `xyz.py`**, no al evaluador.
+      - **Al parametrizar el evaluador**: el `recomendador.py` debe pasar
+        **los mismos valores** a `xyz.py` y a `evaluador.py` para
+        mantener la coherencia.
+      - Documentado en el docstring de `xyz.py`.
 
 - [ ] **Configurabilidad completa de parámetros** (post-MVP)
       - La tabla `parametros_configuracion` tiene 10 filas.
@@ -143,7 +156,8 @@ aspectos a revisar antes de cerrar el MVP.
   - ✅ `abc.py`: parametrizado (`umbral_clase_a`, `umbral_clase_b`).
   - ✅ `demanda.py`: parametrizado (`ventana`, con cast a int).
   - ✅ `proveedor.py`: parametrizado (`umbral_confiable`, `umbral_riesgoso`).
-  - ⏳ `xyz.py`, `ahorro.py`: pendientes.
+  - ✅ `xyz.py`: parametrizado (`umbral_x`, `umbral_y`).
+  - ⏳ `ahorro.py`: pendiente.
   - No aplica a `eoq_rop.py` (sus parámetros no están en la tabla).
 
 ## Notas de configurabilidad
