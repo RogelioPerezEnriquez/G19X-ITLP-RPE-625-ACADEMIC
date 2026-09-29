@@ -2,18 +2,31 @@
 
 Solo pruebas de la función pura ``src.motor.xyz.clasificar_xyz``: no se toca
 red, base de datos ni archivos.
+
+Los umbrales de corte ya no son constantes del módulo (``UMBRAL_X`` y
+``UMBRAL_Y`` se eliminaron al parametrizar el módulo en la fase 4): los tests
+los leen de la firma de ``clasificar_xyz``, que a su vez los lee de
+:data:`src.config.PARAMETROS_DEFAULT`.
 """
+
+import inspect
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from src.config import PARAMETROS_DEFAULT
 from src.motor.xyz import (
     TOLERANCIA_CV,
-    UMBRAL_X,
-    UMBRAL_Y,
     clasificar_xyz,
 )
+
+# Umbrales por defecto del motor, leídos de la propia firma: los tests de cortes
+# se refieren así al default real que usa clasificar_xyz y no a una copia local
+# del valor (mismo criterio que test_demanda.py y test_proveedor.py).
+_FIRMA = inspect.signature(clasificar_xyz).parameters
+UMBRAL_X: float = _FIRMA["umbral_x"].default
+UMBRAL_Y: float = _FIRMA["umbral_y"].default
 
 
 # ---------------------------------------------------------------- utilidades
@@ -559,3 +572,164 @@ def test_muchos_productos_coinciden_con_el_calculo_manual():
             assert _cv(resultado, producto_id) == pytest.approx(
                 _cv_manual(cantidades), rel=1e-3
             )
+
+
+# ------------------------------------------- umbrales configurables (fase 4)
+
+
+def test_los_defaults_de_los_umbrales_vienen_de_config():
+    """Sin argumentos se usan los umbrales de PARAMETROS_DEFAULT (0.5 y 1.0)."""
+    parametros = inspect.signature(clasificar_xyz).parameters
+
+    assert parametros["umbral_x"].default == PARAMETROS_DEFAULT["cv_confianza_alta"]
+    assert parametros["umbral_y"].default == PARAMETROS_DEFAULT["cv_confianza_media"]
+    # Y los valores de config siguen siendo los históricos del módulo.
+    assert PARAMETROS_DEFAULT["cv_confianza_alta"] == 0.5
+    assert PARAMETROS_DEFAULT["cv_confianza_media"] == 1.0
+
+
+def test_el_default_de_umbral_x_es_0_5_leido_de_la_firma():
+    """El default de `umbral_x` es 0.5, leído de la firma."""
+    parametro = inspect.signature(clasificar_xyz).parameters["umbral_x"]
+
+    assert parametro.default == 0.5
+    assert parametro.default == PARAMETROS_DEFAULT["cv_confianza_alta"]
+    assert isinstance(parametro.default, float)
+    assert not isinstance(parametro.default, bool)
+    assert parametro.annotation is float
+
+
+def test_el_default_de_umbral_y_es_1_0_leido_de_la_firma():
+    """El default de `umbral_y` es 1.0, leído de la firma."""
+    parametro = inspect.signature(clasificar_xyz).parameters["umbral_y"]
+
+    assert parametro.default == 1.0
+    assert parametro.default == PARAMETROS_DEFAULT["cv_confianza_media"]
+    assert isinstance(parametro.default, float)
+    assert not isinstance(parametro.default, bool)
+    assert parametro.annotation is float
+
+
+def test_sin_umbrales_equivale_a_pasar_los_defaults_de_config():
+    """No pasar umbrales equivale a pasar 0.5 y 1.0: nada cambió por defecto."""
+    historial = _apilados(
+        {
+            "P001": [100.0, 105.0, 98.0, 102.0],
+            "P002": [50.0, 300.0, 80.0, 450.0],
+            "P003": [10.0, 200.0, 15.0, 180.0],
+        }
+    )
+
+    pd.testing.assert_frame_equal(
+        clasificar_xyz(historial),
+        clasificar_xyz(
+            historial,
+            umbral_x=PARAMETROS_DEFAULT["cv_confianza_alta"],
+            umbral_y=PARAMETROS_DEFAULT["cv_confianza_media"],
+        ),
+    )
+
+
+def test_umbral_x_custom_0_3_reclasifica_el_cv_0_4_a_clase_y():
+    """CV 0.4: clase X con el default (0.5) y clase Y con umbral_x = 0.3."""
+    historial = _dos_periodos_con_cv(0.4)
+
+    por_defecto = clasificar_xyz(historial)
+    custom = clasificar_xyz(historial, umbral_x=0.3)
+
+    assert _cv(por_defecto, "P1") == pytest.approx(0.4, rel=1e-6)
+    assert _clase(por_defecto, "P1") == "X"
+    assert _clase(custom, "P1") == "Y"
+    # El umbral solo mueve la clasificación: el CV es el mismo.
+    pd.testing.assert_series_equal(custom["cv"], por_defecto["cv"])
+
+
+def test_umbral_x_custom_0_1_reclasifica_el_cv_0_2_a_clase_y():
+    """Estrechar el corte mueve en el otro sentido: CV 0.2 pasa de X a Y."""
+    historial = _dos_periodos_con_cv(0.2)
+
+    assert _clase(clasificar_xyz(historial), "P1") == "X"
+    assert _clase(clasificar_xyz(historial, umbral_x=0.1), "P1") == "Y"
+
+
+def test_umbral_y_custom_1_5_reclasifica_el_cv_1_2_a_clase_y():
+    """CV 1.2: clase Z con el default (1.0) y clase Y con umbral_y = 1.5.
+
+    La fórmula de _dos_periodos_con_cv cubre CV < sqrt(2) ~ 1.4142, así que 1.2
+    sí es representable con dos periodos.
+    """
+    historial = _dos_periodos_con_cv(1.2)
+
+    por_defecto = clasificar_xyz(historial)
+    custom = clasificar_xyz(historial, umbral_y=1.5)
+
+    assert _cv(por_defecto, "P1") == pytest.approx(1.2, rel=1e-6)
+    assert _clase(por_defecto, "P1") == "Z"
+    assert _clase(custom, "P1") == "Y"
+    pd.testing.assert_series_equal(custom["cv"], por_defecto["cv"])
+
+
+def test_ambos_umbrales_custom_a_la_vez_clasifican_los_tres_tramos():
+    """Con 0.3 y 1.5, los CV 0.2, 0.4 y ~1.55 caen en los tres tramos.
+
+    Con los defaults el resultado es X, X y Z: al ensanchar las bandas a
+    0.3/1.5, el producto de CV 0.4 pasa a Y y el de CV ~1.55 sigue en Z.
+    """
+    historial = pd.concat(
+        [
+            _dos_periodos_con_cv(0.2, producto_id="X1"),
+            _dos_periodos_con_cv(0.4, producto_id="Y1"),
+            _periodos("Z1", [10.0, 300.0, 12.0]),
+        ],
+        ignore_index=True,
+    )
+
+    por_defecto = clasificar_xyz(historial)
+    custom = clasificar_xyz(historial, umbral_x=0.3, umbral_y=1.5)
+
+    # El tercer producto tiene un CV ~1.5546: por encima de 1.5 sigue siendo Z.
+    assert _cv(custom, "Z1") == pytest.approx(
+        _cv_manual([10.0, 300.0, 12.0]), rel=1e-9
+    )
+    assert _cv(custom, "Z1") > 1.5
+    assert list(por_defecto["clase_xyz"]) == ["X", "X", "Z"]
+    assert list(custom["clase_xyz"]) == ["X", "Y", "Z"]
+    pd.testing.assert_series_equal(custom["cv"], por_defecto["cv"])
+
+
+def test_umbrales_custom_respetan_las_fronteras_exactas():
+    """Los cortes custom son inclusivos: en el CV exacto gana la clase de abajo.
+
+    Cada frontera se construye igualando el umbral al CV del producto (calculado
+    con pandas, ddof=1), así que el corte coincide con el CV que ve el motor
+    salvo el redondeo de punto flotante que absorbe TOLERANCIA_CV.
+    """
+    cantidades_x = [100.0, 130.0, 115.0]  # CV = 15 / 115 ~ 0.1304
+    cantidades_y = [50.0, 300.0, 80.0, 450.0]  # CV ~ 0.8616
+    cv_x = _cv_manual(cantidades_x)
+    cv_y = _cv_manual(cantidades_y)
+
+    assert cv_x < cv_y  # el escenario tiene sentido: las bandas no se cruzan.
+
+    resultado = clasificar_xyz(
+        _apilados({"P001": cantidades_x, "P002": cantidades_y}),
+        umbral_x=cv_x,
+        umbral_y=cv_y,
+    )
+
+    assert _cv(resultado, "P001") == pytest.approx(cv_x, rel=1e-12)
+    assert _clase(resultado, "P001") == "X"
+    assert _cv(resultado, "P002") == pytest.approx(cv_y, rel=1e-12)
+    assert _clase(resultado, "P002") == "Y"
+
+
+def test_los_umbrales_custom_tambien_absorben_el_ruido_de_punto_flotante():
+    """CV apenas por encima de 0.3: sigue siendo X con umbral_x = 0.3."""
+    resultado = clasificar_xyz(
+        _dos_periodos_con_cv(0.3 + TOLERANCIA_CV / 10.0), umbral_x=0.3
+    )
+
+    assert _cv(resultado, "P1") > 0.3
+    assert _cv(resultado, "P1") <= 0.3 + TOLERANCIA_CV
+    assert _clase(resultado, "P1") == "X"
+

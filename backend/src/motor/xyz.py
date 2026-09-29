@@ -9,16 +9,27 @@ de su demanda histórica, usando la desviación estándar **muestral**::
 
     CV = std_muestral(cantidad_demandada) / media(cantidad_demandada)
 
-Los cortes sobre el CV definen las clases:
+Los cortes sobre el CV son parámetros de :func:`clasificar_xyz` y sus valores
+por defecto vienen de :data:`src.config.PARAMETROS_DEFAULT`
+(``cv_confianza_alta`` y ``cv_confianza_media``), que son los que describen la
+regla original:
 
-* Clase X: CV <= 0.5 (demanda estable).
-* Clase Y: 0.5 < CV <= 1.0 (demanda con variación moderada).
-* Clase Z: CV > 1.0 (demanda errática).
+* Clase X: CV <= umbral_x (default 0.5, demanda estable).
+* Clase Y: umbral_x < CV <= umbral_y (default 0.5 < CV <= 1.0, demanda con
+  variación moderada).
+* Clase Z: CV > umbral_y (default CV > 1.0, demanda errática).
+
+Ojo con los nombres: los parámetros se llaman ``umbral_x`` y ``umbral_y``
+(coherente con las clases X/Y/Z de este módulo), pero sus defaults se leen de
+las claves ``cv_confianza_alta`` y ``cv_confianza_media`` de la tabla de
+configuración (db/schema.sql), que llevan el nombre del criterio que los usa:
+la confianza en la demanda.
 
 El CV que devuelve este módulo es la fuente única de verdad para la
 clasificación XYZ y para el criterio de confianza en la demanda estimada
 (MVP.md, sección 9, criterio 3): se calcula una sola vez por producto y se
-reutiliza, en lugar de recalcularlo aguas abajo.
+reutiliza, en lugar de recalcularlo aguas abajo. Los cortes de ese criterio son
+estos mismos ``umbral_x`` y ``umbral_y``.
 
 A diferencia de :mod:`src.motor.abc`, aquí un producto puede no tener CV
 calculable (media cero o menos de dos periodos de historia). Esos casos se
@@ -30,6 +41,8 @@ se exige siempre, tenga o no filas el DataFrame de entrada.
 import numpy as np
 import pandas as pd
 
+from src.config import PARAMETROS_DEFAULT
+
 __all__ = ["clasificar_xyz"]
 
 # Columnas mínimas que debe traer el DataFrame de entrada.
@@ -38,11 +51,13 @@ COLUMNAS_REQUERIDAS: tuple[str, ...] = (
     "cantidad_demandada",
 )
 
-# Umbrales de corte sobre el coeficiente de variación. Fuente única de verdad:
-# cuando el MVP incorpore la tabla de configuración, estos serán sus valores
-# por defecto (db/schema.sql: cv_confianza_alta, cv_confianza_media).
-UMBRAL_X: float = 0.5
-UMBRAL_Y: float = 1.0
+# Los umbrales de corte sobre el CV no viven aquí: son parámetros de
+# :func:`clasificar_xyz` y su fuente única de verdad es
+# src.config.PARAMETROS_DEFAULT ('cv_confianza_alta' = 0.5 y
+# 'cv_confianza_media' = 1.0), de donde se leen los defaults de la firma. Los
+# nombres de los parámetros siguen las clases X/Y/Z de este módulo; las claves
+# de config siguen el nombre del criterio que las usa (db/schema.sql: la
+# confianza en la demanda).
 
 # Tolerancia al comparar el CV con los umbrales. Absorbe el ruido de punto
 # flotante (p. ej. un CV real de 0.5 representado como 0.5000000000000001) sin
@@ -54,7 +69,11 @@ TOLERANCIA_CV: float = 1e-9
 MIN_PERIODOS: int = 2
 
 
-def clasificar_xyz(historial: pd.DataFrame) -> pd.DataFrame:
+def clasificar_xyz(
+    historial: pd.DataFrame,
+    umbral_x: float = PARAMETROS_DEFAULT["cv_confianza_alta"],
+    umbral_y: float = PARAMETROS_DEFAULT["cv_confianza_media"],
+) -> pd.DataFrame:
     """
     Clasifica productos por variabilidad de su demanda histórica (X/Y/Z).
 
@@ -63,6 +82,20 @@ def clasificar_xyz(historial: pd.DataFrame) -> pd.DataFrame:
             requeridas:
             - producto_id: identificador único del producto
             - cantidad_demandada: cantidad demandada en ese periodo (float >= 0)
+        umbral_x: CV máximo de la clase X (demanda estable), en fracción (no en
+            porcentaje). Default 0.5, leído de
+            ``config.PARAMETROS_DEFAULT['cv_confianza_alta']``: un producto
+            entra en la clase X si su CV es <= umbral_x. Es también el corte
+            "CV alto" del criterio 3 (confianza en la demanda) de
+            :mod:`src.evaluador`.
+        umbral_y: CV máximo de la clase Y (demanda con variación moderada), en
+            fracción (no en porcentaje). Default 1.0, leído de
+            ``config.PARAMETROS_DEFAULT['cv_confianza_media']``: un producto
+            entra en la clase Y si su CV es <= umbral_y y no entró en la clase
+            X. Para que la banda Y no quede vacía debe cumplirse
+            umbral_x <= umbral_y; el orden no se valida aquí (ver Notas). Es
+            también el corte "CV moderado" del criterio 3 de
+            :mod:`src.evaluador`.
 
     Returns:
         DataFrame con una fila por producto, con columnas:
@@ -76,9 +109,9 @@ def clasificar_xyz(historial: pd.DataFrame) -> pd.DataFrame:
 
     Reglas:
         - CV = std(cantidad_demandada, ddof=1) / mean(cantidad_demandada)
-        - Clase X: CV <= 0.5
-        - Clase Y: 0.5 < CV <= 1.0
-        - Clase Z: CV > 1.0
+        - Clase X: CV <= umbral_x (default CV <= 0.5)
+        - Clase Y: umbral_x < CV <= umbral_y (default 0.5 < CV <= 1.0)
+        - Clase Z: CV > umbral_y (default CV > 1.0)
         - Producto con menos de 2 periodos: se excluye (no se puede calcular
           desviación estándar).
         - Producto con media cero (todos los periodos en 0): cv=None,
@@ -94,6 +127,21 @@ def clasificar_xyz(historial: pd.DataFrame) -> pd.DataFrame:
         - Se usa desviación estándar muestral (ddof=1), no poblacional.
         - El CV se calcula una sola vez por producto y se reutiliza para XYZ
           y para el criterio de confianza en la demanda (ver MVP.md sección 9).
+        - Los dos umbrales son parámetros con default: quien no los pase obtiene
+          exactamente el comportamiento histórico (0.5 y 1.0), porque sus
+          defaults se leen de :data:`src.config.PARAMETROS_DEFAULT` y este
+          módulo no guarda copias locales de esos valores.
+        - Los umbrales se usan tal cual: no se validan sus rangos ni su orden
+          (el módulo solo mantiene la validación estricta de columnas). Casos
+          borde documentados: con ``umbral_x`` > 0 y ``umbral_y`` <=
+          ``umbral_x`` la banda Y queda vacía y cada producto es X o Z según el
+          primer corte; con ``umbral_x`` < 0 ningún producto es X salvo uno de
+          desviación cero (CV = 0), que entra por :data:`TOLERANCIA_CV`.
+        - El criterio 3 (confianza en la demanda) de :mod:`src.evaluador` usa
+          estos mismos cortes, pero hoy los tiene duplicados en sus constantes
+          ``CV_ALTA`` (0.5) y ``CV_MODERADA`` (1.0): pasar umbrales custom aquí
+          NO mueve la rúbrica del evaluador mientras ese módulo no lea sus
+          parámetros de configuración.
         - La salida es un DataFrame nuevo, con una fila por producto (no una
           copia de la entrada con una columna añadida), con un RangeIndex
           nuevo desde 0.
@@ -150,12 +198,12 @@ def clasificar_xyz(historial: pd.DataFrame) -> pd.DataFrame:
     np.divide(desviacion, media, out=cv, where=tiene_cv)
 
     # Los cortes son inclusivos y se evalúan con la tolerancia sumada al
-    # umbral, de modo que un CV exactamente igual a 0.5 o a 1.0 quede siempre
-    # del lado correcto aunque su representación flotante sea superior.
+    # umbral, de modo que un CV exactamente igual a umbral_x o a umbral_y quede
+    # siempre del lado correcto aunque su representación flotante sea superior.
     clase: np.ndarray = np.select(
         [
-            tiene_cv & (cv <= UMBRAL_X + TOLERANCIA_CV),
-            tiene_cv & (cv <= UMBRAL_Y + TOLERANCIA_CV),
+            tiene_cv & (cv <= umbral_x + TOLERANCIA_CV),
+            tiene_cv & (cv <= umbral_y + TOLERANCIA_CV),
         ],
         ["X", "Y"],
         default="Z",
