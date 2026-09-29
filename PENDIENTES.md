@@ -11,7 +11,8 @@ aspectos a revisar antes de cerrar el MVP.
       - Revisar cuando terminen los 5 módulos del motor (abc, xyz,
         demanda, proveedor, ahorro) y el evaluador.
       - Líneas afectadas: `config.py:51` (docstring), `config.py:78`
-        (encabezado del comentario), `config.py:82-84` (referencias a
+        (encabezado del comentario), `config.py:81` (referencia a
+        `UMBRAL_AHORRO_PCT_DEFAULT`), `config.py:82-84` (referencias a
         `UMBRAL_X`/`UMBRAL_Y`/`VENTANA_DEFAULT` que ya no existen),
         `config.py:87-88` (referencias a `UMBRAL_CONFIABLE`/`UMBRAL_RIESGOSO`).
 
@@ -28,7 +29,8 @@ aspectos a revisar antes de cerrar el MVP.
       - Cuando se parametrice `evaluador.py`, eliminar estas constantes
         y recibir los umbrales como parámetros.
       - Comentarios obsoletos: `evaluador.py:172-173` (mencionan
-        `UMBRAL_X`/`UMBRAL_Y`).
+        `UMBRAL_X`/`UMBRAL_Y`), `evaluador.py:182` (menciona
+        `UMBRAL_AHORRO_PCT_DEFAULT`).
 
 - [ ] **Coherencia de umbrales entre `xyz.py` y `evaluador.py`**
       - Los umbrales `cv_confianza_alta` y `cv_confianza_media` son usados
@@ -55,6 +57,7 @@ aspectos a revisar antes de cerrar el MVP.
           `MARGEN_SEGURIDAD_PCT_DEFAULT`.
         - `proveedor.py`: `PESO_CUMPLIMIENTO`, `PESO_CALIDAD`.
         - `xyz.py`: `MIN_PERIODOS`.
+        - `ahorro.py`: `PERIODOS_POR_AÑO_DEFAULT`.
         - `recomendador.py`: `URGENCIA_*`.
       - Si en el futuro se quiere configurabilidad total, añadir esos
         parámetros a la tabla.
@@ -149,15 +152,14 @@ aspectos a revisar antes de cerrar el MVP.
   - No tienen ningún proveedor en `producto_proveedor`.
   - Tienen `cv_demanda` no calculable (demanda media cero).
 
-- **Parametrización de módulos del motor**: a partir de la fase de
-  configurabilidad, los módulos del motor reciben sus umbrales como
-  parámetros con defaults importados de `config.PARAMETROS_DEFAULT`.
-  Estado actual:
-  - ✅ `abc.py`: parametrizado (`umbral_clase_a`, `umbral_clase_b`).
-  - ✅ `demanda.py`: parametrizado (`ventana`, con cast a int).
-  - ✅ `proveedor.py`: parametrizado (`umbral_confiable`, `umbral_riesgoso`).
-  - ✅ `xyz.py`: parametrizado (`umbral_x`, `umbral_y`).
-  - ⏳ `ahorro.py`: pendiente.
+- **Parametrización de módulos del motor**: el motor está 100%
+  parametrizado. Los módulos reciben sus umbrales como parámetros con
+  defaults importados de `config.PARAMETROS_DEFAULT`:
+  - `abc.py`: `umbral_clase_a`, `umbral_clase_b`.
+  - `demanda.py`: `ventana` (con cast a int).
+  - `proveedor.py`: `umbral_confiable`, `umbral_riesgoso`.
+  - `xyz.py`: `umbral_x`, `umbral_y`.
+  - `ahorro.py`: `umbral_ahorro_pct`.
   - No aplica a `eoq_rop.py` (sus parámetros no están en la tabla).
 
 ## Notas de configurabilidad
