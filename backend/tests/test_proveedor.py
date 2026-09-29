@@ -3,12 +3,19 @@
 Solo pruebas de la función pura
 ``src.motor.proveedor.calcular_score_proveedor``: no se toca red, base de datos
 ni archivos.
+
+La última sección cubre los umbrales configurables (fase 4): los estados se
+calculan con los cortes que recibe la función y sus valores por defecto se
+leen de :data:`src.config.PARAMETROS_DEFAULT`.
 """
+
+import inspect
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from src.config import PARAMETROS_DEFAULT
 from src.motor.proveedor import (
     COLUMNAS_REQUERIDAS,
     ESTADO_ACEPTABLE,
@@ -17,8 +24,6 @@ from src.motor.proveedor import (
     PESO_CALIDAD,
     PESO_CUMPLIMIENTO,
     TOLERANCIA_SCORE,
-    UMBRAL_CONFIABLE,
-    UMBRAL_RIESGOSO,
     calcular_score_proveedor,
 )
 
@@ -79,9 +84,12 @@ def _mapa_estados(resultado: pd.DataFrame) -> dict:
 
 
 def test_las_constantes_del_modulo_son_las_esperadas():
-    """Umbrales, pesos, columnas y etiquetas quedan fijados en el módulo."""
-    assert UMBRAL_CONFIABLE == 80.0
-    assert UMBRAL_RIESGOSO == 60.0
+    """Pesos, tolerancia, columnas y etiquetas quedan fijados en el módulo.
+
+    Los umbrales ya no son constantes de módulo: son parámetros de
+    `calcular_score_proveedor` y se verifican en la sección de umbrales
+    configurables (fase 4).
+    """
     assert TOLERANCIA_SCORE == 1e-9
     assert PESO_CUMPLIMIENTO == 0.6
     assert PESO_CALIDAD == 0.4
@@ -208,10 +216,22 @@ def test_frontera_score_exactamente_60_es_aceptable_con_reservas(
     [
         # Score matemático 60, representado como 59.99999999999999 (< 60): sin
         # la tolerancia caería en "Riesgoso" en lugar de "Aceptable".
-        (96.0, 94.0, UMBRAL_RIESGOSO, ESTADO_ACEPTABLE),
+        # El umbral se toma del default de config, que es el que usa la
+        # función cuando no se le pasan umbrales.
+        (
+            96.0,
+            94.0,
+            PARAMETROS_DEFAULT["score_proveedor_riesgoso"],
+            ESTADO_ACEPTABLE,
+        ),
         # Score matemático 80, representado como 79.99999999939999 (< 80): sin
         # la tolerancia caería en "Aceptable con reservas".
-        (79.999999999, 20.0, UMBRAL_CONFIABLE, ESTADO_CONFIABLE),
+        (
+            79.999999999,
+            20.0,
+            PARAMETROS_DEFAULT["score_proveedor_confiable"],
+            ESTADO_CONFIABLE,
+        ),
     ],
 )
 def test_el_ruido_de_punto_flotante_en_los_cortes_no_cambia_el_estado(
@@ -447,3 +467,182 @@ def test_valores_muy_pequenos_no_rompen_el_calculo():
     assert np.isfinite(score)
     assert score == pytest.approx(diminuto * PESO_CUMPLIMIENTO)
     assert _estado(resultado, "P001") == ESTADO_RIESGOSO
+
+
+# ------------------------------------------- umbrales configurables (fase 4)
+
+
+def test_los_defaults_de_los_umbrales_vienen_de_config():
+    """Sin argumentos se usan los umbrales de PARAMETROS_DEFAULT (80 y 60)."""
+    parametros = inspect.signature(calcular_score_proveedor).parameters
+
+    assert parametros["umbral_confiable"].default == (
+        PARAMETROS_DEFAULT["score_proveedor_confiable"]
+    )
+    assert parametros["umbral_riesgoso"].default == (
+        PARAMETROS_DEFAULT["score_proveedor_riesgoso"]
+    )
+    # Y los valores de config siguen siendo los históricos del módulo.
+    assert PARAMETROS_DEFAULT["score_proveedor_confiable"] == 80.0
+    assert PARAMETROS_DEFAULT["score_proveedor_riesgoso"] == 60.0
+
+
+def test_el_default_de_umbral_confiable_es_80():
+    """El default de `umbral_confiable` es 80.0, leído de la firma."""
+    parametro = inspect.signature(calcular_score_proveedor).parameters[
+        "umbral_confiable"
+    ]
+
+    assert parametro.default == 80.0
+    assert parametro.default == PARAMETROS_DEFAULT["score_proveedor_confiable"]
+    assert isinstance(parametro.default, float)
+    assert not isinstance(parametro.default, bool)
+    assert parametro.annotation is float
+
+
+def test_el_default_de_umbral_riesgoso_es_60():
+    """El default de `umbral_riesgoso` es 60.0, leído de la firma."""
+    parametro = inspect.signature(calcular_score_proveedor).parameters[
+        "umbral_riesgoso"
+    ]
+
+    assert parametro.default == 60.0
+    assert parametro.default == PARAMETROS_DEFAULT["score_proveedor_riesgoso"]
+    assert isinstance(parametro.default, float)
+    assert not isinstance(parametro.default, bool)
+    assert parametro.annotation is float
+
+
+def test_sin_umbrales_equivale_a_pasar_los_defaults_de_config():
+    """Llamar sin umbrales y pasar 80.0 / 60.0 dan exactamente lo mismo."""
+    proveedores = _proveedores(
+        ["P001", "P002", "P003"], [95, 70, 50], [2, 15, 25]
+    )
+
+    pd.testing.assert_frame_equal(
+        calcular_score_proveedor(proveedores),
+        calcular_score_proveedor(
+            proveedores,
+            umbral_confiable=PARAMETROS_DEFAULT["score_proveedor_confiable"],
+            umbral_riesgoso=PARAMETROS_DEFAULT["score_proveedor_riesgoso"],
+        ),
+    )
+
+
+def test_umbral_confiable_custom_90_reclasifica_el_proveedor_de_85():
+    """Score 85: "Confiable" con el default (80) y "Aceptable" con 90."""
+    proveedores = _uno(85.0, 15.0)
+
+    por_defecto = calcular_score_proveedor(proveedores)
+    custom = calcular_score_proveedor(proveedores, umbral_confiable=90.0)
+
+    assert _score(por_defecto, "P001") == pytest.approx(85.0)
+    assert _estado(por_defecto, "P001") == ESTADO_CONFIABLE
+    assert _mapa_estados(custom) == {"P001": ESTADO_ACEPTABLE}
+    # El umbral solo mueve la clasificación: el score es el mismo.
+    pd.testing.assert_series_equal(custom["score"], por_defecto["score"])
+
+
+def test_umbral_riesgoso_custom_70_reclasifica_el_proveedor_de_65():
+    """Score 65: "Aceptable" con el default (60) y "Riesgoso" con 70."""
+    proveedores = _uno(65.0, 35.0)
+
+    por_defecto = calcular_score_proveedor(proveedores)
+    custom = calcular_score_proveedor(proveedores, umbral_riesgoso=70.0)
+
+    assert _score(por_defecto, "P001") == pytest.approx(65.0)
+    assert _estado(por_defecto, "P001") == ESTADO_ACEPTABLE
+    assert _mapa_estados(custom) == {"P001": ESTADO_RIESGOSO}
+    pd.testing.assert_series_equal(custom["score"], por_defecto["score"])
+
+
+def test_ambos_umbrales_custom_a_la_vez_clasifican_los_tres_tramos():
+    """Con 90 y 70 los scores 100, 85 y 65 caen en los tres estados."""
+    proveedores = _proveedores(
+        ["P001", "P002", "P003"], [100, 85, 65], [0, 15, 35]
+    )
+
+    por_defecto = calcular_score_proveedor(proveedores)
+    custom = calcular_score_proveedor(
+        proveedores, umbral_confiable=90.0, umbral_riesgoso=70.0
+    )
+
+    assert _mapa_estados(por_defecto) == {
+        "P001": ESTADO_CONFIABLE,  # 100.0
+        "P002": ESTADO_CONFIABLE,  # 85.0
+        "P003": ESTADO_ACEPTABLE,  # 65.0
+    }
+    assert _mapa_estados(custom) == {
+        "P001": ESTADO_CONFIABLE,  # 100.0 >= 90
+        "P002": ESTADO_ACEPTABLE,  # 70 <= 85.0 < 90
+        "P003": ESTADO_RIESGOSO,  # 65.0 < 70
+    }
+    assert list(custom.columns) == ["proveedor_id", "score", "estado"]
+    assert set(custom["estado"]) == {
+        ESTADO_CONFIABLE,
+        ESTADO_ACEPTABLE,
+        ESTADO_RIESGOSO,
+    }
+    # Con umbrales custom los scores no cambian: solo los cortes.
+    pd.testing.assert_series_equal(custom["score"], por_defecto["score"])
+
+
+def test_umbrales_custom_respetan_las_fronteras_exactas():
+    """Los cortes custom son inclusivos: 90 es "Confiable" y 70 "Aceptable"."""
+    exacto_confiable = _uno(100.0, 25.0)  # score 90.0
+    exacto_riesgoso = _uno(70.0, 30.0)  # score 70.0
+
+    resultado_confiable = calcular_score_proveedor(
+        exacto_confiable, umbral_confiable=90.0, umbral_riesgoso=70.0
+    )
+    resultado_riesgoso = calcular_score_proveedor(
+        exacto_riesgoso, umbral_confiable=90.0, umbral_riesgoso=70.0
+    )
+
+    assert _score(resultado_confiable, "P001") == 90.0
+    assert _estado(resultado_confiable, "P001") == ESTADO_CONFIABLE
+    assert _score(resultado_riesgoso, "P001") == 70.0
+    assert _estado(resultado_riesgoso, "P001") == ESTADO_ACEPTABLE
+
+
+def test_umbrales_invertidos_dejan_vacia_la_banda_aceptable():
+    """Documentado: con umbral_confiable <= umbral_riesgoso no hay banda media.
+
+    Con esos cortes ningún proveedor queda en "Aceptable con reservas".
+    """
+    proveedores = _proveedores(["P001", "P002"], [95, 50], [2, 30])
+
+    resultado = calcular_score_proveedor(
+        proveedores, umbral_confiable=60.0, umbral_riesgoso=80.0
+    )
+
+    assert _mapa_estados(resultado) == {
+        "P001": ESTADO_CONFIABLE,  # 96.2 >= 60
+        "P002": ESTADO_RIESGOSO,  # 58.0 < 80
+    }
+    assert ESTADO_ACEPTABLE not in set(resultado["estado"])
+
+
+def test_umbrales_extremos_no_dejan_tramos_inalcanzables():
+    """Documentado: con umbral_confiable > 100 no hay "Confiable" y con
+    umbral_riesgoso <= 0 no hay "Riesgoso" (scores dentro del rango 0-100).
+    """
+    proveedores = _proveedores(["P001", "P002"], [100, 0], [0, 100])
+
+    sin_confiables = calcular_score_proveedor(
+        proveedores, umbral_confiable=150.0
+    )
+    sin_riesgosos = calcular_score_proveedor(proveedores, umbral_riesgoso=0.0)
+
+    assert _mapa_estados(sin_confiables) == {
+        "P001": ESTADO_ACEPTABLE,  # 100.0 < 150
+        "P002": ESTADO_RIESGOSO,  # 0.0 < 60
+    }
+    assert ESTADO_CONFIABLE not in set(sin_confiables["estado"])
+
+    assert _mapa_estados(sin_riesgosos) == {
+        "P001": ESTADO_CONFIABLE,  # 100.0 >= 80
+        "P002": ESTADO_ACEPTABLE,  # 0.0 >= 0 - 1e-9
+    }
+    assert ESTADO_RIESGOSO not in set(sin_riesgosos["estado"])
+

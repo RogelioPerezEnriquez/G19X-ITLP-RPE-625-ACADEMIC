@@ -17,40 +17,44 @@ entrega a tiempo y produce todo defectuoso obtiene 0.
 
 Los cortes sobre el score definen el estado (MVP.md, sección 10, criterio 5):
 
-* Confiable: score >= 80.
-* Aceptable con reservas: 60 <= score < 80.
-* Riesgoso: score < 60.
+* Confiable: score >= umbral_confiable (default 80).
+* Aceptable con reservas: umbral_riesgoso <= score < umbral_confiable
+  (default 60 <= score < 80).
+* Riesgoso: score < umbral_riesgoso (default 60).
 
 Los cortes se evalúan con una tolerancia de :data:`TOLERANCIA_SCORE` (1e-9) para
-absorber el ruido de punto flotante: ``score >= 80 - 1e-9`` es confiable y
-``score < 60 - 1e-9`` es riesgoso. Sin esa tolerancia, una combinación cuyo
-score matemático cae justo en un corte pero se representa por debajo quedaría
-mal clasificada: cumplimiento 96 con defectos 94 da un score matemático de 60
-que en float64 vale 59.99999999999999, y sin tolerancia sería "Riesgoso" en
-lugar de "Aceptable con reservas". La tolerancia es holgada frente a ese ruido
-(del orden de 1e-14) y muchísimo menor que cualquier diferencia relevante entre
-proveedores: para cambiar de estado hace falta una diferencia de score muy
-superior a 1e-9, cuando las diferencias que importan en la práctica son de
-décimas de punto. El mismo criterio usan :mod:`src.motor.abc`
+absorber el ruido de punto flotante: ``score >= umbral_confiable - 1e-9`` es
+confiable y ``score < umbral_riesgoso - 1e-9`` es riesgoso. Sin esa tolerancia,
+una combinación cuyo score matemático cae justo en un corte pero se representa
+por debajo quedaría mal clasificada: cumplimiento 96 con defectos 94 da un score
+matemático de 60 que en float64 vale 59.99999999999999, y sin tolerancia sería
+"Riesgoso" en lugar de "Aceptable con reservas". La tolerancia es holgada frente
+a ese ruido (del orden de 1e-14) y muchísimo menor que cualquier diferencia
+relevante entre proveedores: para cambiar de estado hace falta una diferencia
+de score muy superior a 1e-9, cuando las diferencias que importan en la
+práctica son de décimas de punto. El mismo criterio usan :mod:`src.motor.abc`
 (``TOLERANCIA_PCT``) y :mod:`src.motor.xyz` (``TOLERANCIA_CV``).
 
 El módulo no agrupa: cada fila de entrada produce una fila de salida, así que un
 ``proveedor_id`` repetido aparecería repetido (el schema garantiza una fila por
 proveedor, con ``id`` como clave primaria).
 
-Los umbrales viven en constantes de módulo (:data:`UMBRAL_CONFIABLE`,
-:data:`UMBRAL_RIESGOSO`) como fuente única de verdad y coinciden con
-``parametros_configuracion`` del schema (``score_proveedor_confiable`` = 80,
-``score_proveedor_riesgoso`` = 60): cuando el MVP incorpore la tabla de
-configuración, esos serán sus valores por defecto. Los pesos de la fórmula
-(:data:`PESO_CUMPLIMIENTO`, :data:`PESO_CALIDAD`) y las etiquetas de estado
-(:data:`ESTADO_CONFIABLE`, :data:`ESTADO_ACEPTABLE`, :data:`ESTADO_RIESGOSO`)
-también son constantes de módulo, para que un cambio de criterio se haga en un
-solo lugar.
+Los cortes sobre el score son parámetros de :func:`calcular_score_proveedor` y
+sus valores por defecto vienen de :data:`src.config.PARAMETROS_DEFAULT`
+(``score_proveedor_confiable`` = 80.0 y ``score_proveedor_riesgoso`` = 60.0),
+que es la fuente única de verdad: cuando el MVP incorpore la tabla de
+configuración, de ahí saldrán sus valores.
+
+Los pesos de la fórmula (:data:`PESO_CUMPLIMIENTO`, :data:`PESO_CALIDAD`) y las
+etiquetas de estado (:data:`ESTADO_CONFIABLE`, :data:`ESTADO_ACEPTABLE`,
+:data:`ESTADO_RIESGOSO`) sí siguen siendo constantes de módulo, para que un
+cambio de criterio se haga en un solo lugar.
 """
 
 import numpy as np
 import pandas as pd
+
+from src.config import PARAMETROS_DEFAULT
 
 __all__ = ["calcular_score_proveedor"]
 
@@ -61,11 +65,10 @@ COLUMNAS_REQUERIDAS: tuple[str, ...] = (
     "tasa_defectos_pct",
 )
 
-# Umbrales de corte sobre el score. Fuente única de verdad: cuando el MVP
-# incorpore la tabla de configuración, estos serán sus valores por defecto
-# (db/schema.sql: score_proveedor_confiable, score_proveedor_riesgoso).
-UMBRAL_CONFIABLE: float = 80.0
-UMBRAL_RIESGOSO: float = 60.0
+# Los umbrales de corte sobre el score no viven aquí: son parámetros de
+# :func:`calcular_score_proveedor` y su fuente única de verdad es
+# src.config.PARAMETROS_DEFAULT ('score_proveedor_confiable' = 80.0 y
+# 'score_proveedor_riesgoso' = 60.0), de donde se leen los defaults de la firma.
 
 # Tolerancia al comparar el score con los umbrales. Absorbe el ruido de punto
 # flotante (p. ej. un score matemático de 60 representado como
@@ -85,7 +88,11 @@ ESTADO_ACEPTABLE: str = "Aceptable con reservas"
 ESTADO_RIESGOSO: str = "Riesgoso"
 
 
-def calcular_score_proveedor(proveedores: pd.DataFrame) -> pd.DataFrame:
+def calcular_score_proveedor(
+    proveedores: pd.DataFrame,
+    umbral_confiable: float = PARAMETROS_DEFAULT["score_proveedor_confiable"],
+    umbral_riesgoso: float = PARAMETROS_DEFAULT["score_proveedor_riesgoso"],
+) -> pd.DataFrame:
     """
     Calcula el score de confiabilidad y el estado de cada proveedor.
 
@@ -95,6 +102,15 @@ def calcular_score_proveedor(proveedores: pd.DataFrame) -> pd.DataFrame:
             - proveedor_id: identificador único del proveedor
             - cumplimiento_entrega_pct: % de entregas a tiempo (0-100)
             - tasa_defectos_pct: % de unidades defectuosas (0-100)
+        umbral_confiable: score mínimo, en la escala 0-100 del score, para
+            considerar a un proveedor "Confiable". Default 80.0, leído de
+            ``config.PARAMETROS_DEFAULT['score_proveedor_confiable']``: un
+            proveedor es "Confiable" si su score es >= umbral_confiable.
+        umbral_riesgoso: score por debajo del cual un proveedor se considera
+            "Riesgoso", en la escala 0-100 del score. Default 60.0, leído de
+            ``config.PARAMETROS_DEFAULT['score_proveedor_riesgoso']``: un
+            proveedor es "Riesgoso" si su score es < umbral_riesgoso, y queda
+            en "Aceptable con reservas" todo el intervalo intermedio.
 
     Returns:
         DataFrame con una fila por proveedor, con columnas:
@@ -107,9 +123,10 @@ def calcular_score_proveedor(proveedores: pd.DataFrame) -> pd.DataFrame:
         - score = cumplimiento_entrega_pct * 0.6
                 + (100 - tasa_defectos_pct) * 0.4
         - Estado (los cortes se comparan con TOLERANCIA_SCORE = 1e-9 de margen):
-            "Confiable":              score >= 80 - 1e-9
-            "Aceptable con reservas": 60 - 1e-9 <= score < 80 - 1e-9
-            "Riesgoso":               score < 60 - 1e-9
+            "Confiable":              score >= umbral_confiable - 1e-9
+            "Aceptable con reservas": umbral_riesgoso - 1e-9 <= score
+                                      < umbral_confiable - 1e-9
+            "Riesgoso":               score < umbral_riesgoso - 1e-9
 
     Notas:
         - La función es pura: no accede a red, DB ni archivos. No imprime
@@ -123,6 +140,18 @@ def calcular_score_proveedor(proveedores: pd.DataFrame) -> pd.DataFrame:
           luego el caso vacío, luego se calculan los scores.
         - 'proveedor_id' es de dtype object en la salida; 'score' es float64;
           'estado' es object.
+        - Los dos umbrales son parámetros con default: quien no los pase
+          obtiene exactamente el comportamiento histórico (80 y 60), porque sus
+          defaults se leen de :data:`src.config.PARAMETROS_DEFAULT` y este
+          módulo no guarda copias locales de esos valores.
+        - Los umbrales se usan tal cual: no se validan sus rangos ni su orden
+          (el módulo solo mantiene la validación estricta de columnas). Casos
+          borde documentados: con umbral_confiable <= umbral_riesgoso la banda
+          "Aceptable con reservas" queda vacía y cada proveedor es "Confiable"
+          o "Riesgoso" según el primer corte; con umbral_confiable > 100 ningún
+          proveedor del rango del schema (score <= 100) es "Confiable"; con
+          umbral_riesgoso <= 0 ningún proveedor del rango (score >= 0) es
+          "Riesgoso".
         - Los cortes se comparan con una tolerancia (TOLERANCIA_SCORE = 1e-9) en
           lugar de forma exacta: el score es un float y hay combinaciones cuyo
           valor matemático cae justo en un umbral pero se representan por
@@ -159,17 +188,17 @@ def calcular_score_proveedor(proveedores: pd.DataFrame) -> pd.DataFrame:
 
     score: np.ndarray = cumplimiento * PESO_CUMPLIMIENTO + calidad * PESO_CALIDAD
 
-    # Los cortes son exhaustivos y mutuamente excluyentes: >= 80 es confiable,
-    # < 60 es riesgoso y todo lo demás (el intervalo [60, 80)) es aceptable con
-    # reservas. 'Aceptable con reservas' va como default para no repetir la
-    # condición del intervalo.
+    # Los cortes son exhaustivos y mutuamente excluyentes: >= umbral_confiable
+    # es confiable, < umbral_riesgoso es riesgoso y todo lo demás (el intervalo
+    # [umbral_riesgoso, umbral_confiable)) es aceptable con reservas. 'Aceptable
+    # con reservas' va como default para no repetir la condición del intervalo.
     # A ambos umbrales se les resta TOLERANCIA_SCORE para absorber el ruido de
     # punto flotante (p. ej. un score matemático de 60 que en float64 vale
     # 59.99999999999999) sin mover ningún corte con diferencia significativa.
     estado: np.ndarray = np.select(
         [
-            score >= UMBRAL_CONFIABLE - TOLERANCIA_SCORE,
-            score < UMBRAL_RIESGOSO - TOLERANCIA_SCORE,
+            score >= umbral_confiable - TOLERANCIA_SCORE,
+            score < umbral_riesgoso - TOLERANCIA_SCORE,
         ],
         [
             ESTADO_CONFIABLE,
