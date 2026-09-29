@@ -6,15 +6,21 @@ ni registra nada.
 
 El valor económico de un producto es ``costo_unitario`` x ``demanda_total``.
 Los productos se ordenan de mayor a menor valor económico y ese valor se
-acumula como porcentaje del total del catálogo:
+acumula como porcentaje del total del catálogo. Los cortes son parámetros de
+:func:`clasificar_abc` y sus valores por defecto vienen de
+:data:`src.config.PARAMETROS_DEFAULT` (``abc_clase_a_pct`` y
+``abc_clase_b_pct``), que son los que describen la regla original:
 
-* Clase A: porcentaje acumulado <= 80 %.
-* Clase B: 80 % < porcentaje acumulado <= 95 %.
-* Clase C: porcentaje acumulado > 95 %.
+* Clase A: porcentaje acumulado <= umbral_clase_a (default 80 %).
+* Clase B: umbral_clase_a < porcentaje acumulado <= umbral_clase_b
+  (default 80 % < porcentaje acumulado <= 95 %).
+* Clase C: porcentaje acumulado > umbral_clase_b (default > 95 %).
 """
 
 import numpy as np
 import pandas as pd
+
+from src.config import PARAMETROS_DEFAULT
 
 __all__ = ["clasificar_abc"]
 
@@ -25,11 +31,10 @@ COLUMNAS_REQUERIDAS: tuple[str, ...] = (
     "demanda_total",
 )
 
-# Umbrales de corte sobre el valor económico acumulado, en porcentaje.
-# Fuente única de verdad: cuando el MVP incorpore la tabla de configuración,
-# estos serán sus valores por defecto.
-UMBRAL_CLASE_A: float = 80.0
-UMBRAL_CLASE_B: float = 95.0
+# Los umbrales de corte sobre el valor económico acumulado (en porcentaje) no
+# viven aquí: son parámetros de :func:`clasificar_abc` y su fuente única de
+# verdad es src.config.PARAMETROS_DEFAULT ('abc_clase_a_pct' = 80.0 y
+# 'abc_clase_b_pct' = 95.0), de donde se leen los defaults de la firma.
 
 # Tolerancia al comparar porcentajes acumulados. Absorbe el ruido de punto
 # flotante (p. ej. un acumulado real de 80 % representado como
@@ -37,7 +42,11 @@ UMBRAL_CLASE_B: float = 95.0
 TOLERANCIA_PCT: float = 1e-9
 
 
-def clasificar_abc(productos: pd.DataFrame) -> pd.DataFrame:
+def clasificar_abc(
+    productos: pd.DataFrame,
+    umbral_clase_a: float = PARAMETROS_DEFAULT["abc_clase_a_pct"],
+    umbral_clase_b: float = PARAMETROS_DEFAULT["abc_clase_b_pct"],
+) -> pd.DataFrame:
     """
     Clasifica productos por importancia económica (A/B/C).
 
@@ -46,6 +55,17 @@ def clasificar_abc(productos: pd.DataFrame) -> pd.DataFrame:
             - producto_id: identificador único del producto
             - costo_unitario: costo por unidad (float >= 0)
             - demanda_total: suma histórica de demanda del producto (float >= 0)
+        umbral_clase_a: porcentaje acumulado máximo de la clase A, expresado en
+            porcentaje (no en fracción). Default 80.0, leído de
+            ``config.PARAMETROS_DEFAULT['abc_clase_a_pct']``: un producto entra
+            en la clase A si su porcentaje acumulado es <= umbral_clase_a.
+        umbral_clase_b: porcentaje acumulado máximo de la clase B, expresado en
+            porcentaje (no en fracción). Default 95.0, leído de
+            ``config.PARAMETROS_DEFAULT['abc_clase_b_pct']``: un producto entra
+            en la clase B si su porcentaje acumulado es <= umbral_clase_b y no
+            entró en la clase A. Para que la banda B no quede vacía debe
+            cumplirse umbral_clase_a <= umbral_clase_b; el orden no se valida
+            aquí (ver Notas).
 
     Returns:
         El mismo DataFrame con una nueva columna 'clase_abc' con valores
@@ -57,9 +77,10 @@ def clasificar_abc(productos: pd.DataFrame) -> pd.DataFrame:
         - En caso de empate en el valor económico, se ordena secundariamente
           por producto_id ascendente para que el cálculo acumulado sea
           determinista. Este criterio es intencional y no debe eliminarse.
-        - Clase A: acumulado <= 80%
-        - Clase B: 80% < acumulado <= 95%
-        - Clase C: acumulado > 95%
+        - Clase A: acumulado <= umbral_clase_a (default 80 %)
+        - Clase B: umbral_clase_a < acumulado <= umbral_clase_b
+          (default 80 % < acumulado <= 95 %)
+        - Clase C: acumulado > umbral_clase_b (default > 95 %)
 
     Notas:
         - La función es pura: no modifica ``productos``, no hace I/O y no
@@ -68,8 +89,21 @@ def clasificar_abc(productos: pd.DataFrame) -> pd.DataFrame:
           cual (no se resetea el índice). Internamente se ordena por valor
           económico para calcular los acumulados y luego se deshace ese orden,
           asignando cada etiqueta a la fila del producto que corresponde.
-        - Un producto que por sí solo represente más del 80 % del valor total
-          será clase A. Es el comportamiento esperado, no un error.
+        - Un producto que por sí solo represente más de ``umbral_clase_a``
+          (80 % por defecto) del valor total será clase A. Es el comportamiento
+          esperado, no un error.
+        - Los dos umbrales son parámetros con default: quien no los pase obtiene
+          exactamente el comportamiento histórico (80 % / 95 %), porque sus
+          defaults se leen de :data:`src.config.PARAMETROS_DEFAULT` y este
+          módulo no guarda copias locales de esos valores.
+        - Los umbrales se usan tal cual: no se validan sus rangos ni su orden
+          (el módulo solo mantiene la validación estricta de columnas). Casos
+          borde documentados: con ``umbral_clase_a`` <= 0.0 la banda A queda
+          vacía, porque ningún porcentaje acumulado positivo puede ser <= 0, y
+          todos los productos son B o C; con ``umbral_clase_a`` >= 100.0 todos
+          los productos son A, porque el acumulado nunca supera el 100 %; y si
+          ``umbral_clase_b`` < ``umbral_clase_a`` la banda B queda vacía y cada
+          producto es A o C según el primer corte.
         - Un catálogo con un solo producto (y valor económico total mayor que
           0) se clasifica como 'A': es un caso degenerado donde el 100 % de
           participación es un artefacto del tamaño del catálogo y no una señal
@@ -137,13 +171,13 @@ def clasificar_abc(productos: pd.DataFrame) -> pd.DataFrame:
     ).to_numpy(dtype="float64")
 
     # Los cortes son inclusivos y se evalúan con la tolerancia sumada al
-    # umbral, de modo que un acumulado exactamente igual a 80 o a 95 quede
-    # siempre del lado correcto aunque su representación flotante sea
-    # levemente superior.
+    # umbral, de modo que un acumulado exactamente igual a umbral_clase_a o a
+    # umbral_clase_b quede siempre del lado correcto aunque su representación
+    # flotante sea levemente superior.
     por_valor["clase_abc"] = np.select(
         [
-            porcentaje_acumulado <= UMBRAL_CLASE_A + TOLERANCIA_PCT,
-            porcentaje_acumulado <= UMBRAL_CLASE_B + TOLERANCIA_PCT,
+            porcentaje_acumulado <= umbral_clase_a + TOLERANCIA_PCT,
+            porcentaje_acumulado <= umbral_clase_b + TOLERANCIA_PCT,
         ],
         ["A", "B"],
         default="C",

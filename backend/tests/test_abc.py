@@ -2,11 +2,18 @@
 
 Solo pruebas de la función pura ``src.motor.abc.clasificar_abc``: no se toca
 red, base de datos ni archivos.
+
+La última sección cubre los umbrales configurables (fase 4): las clases se
+calculan con los cortes que recibe la función y sus valores por defecto se leen
+de :data:`src.config.PARAMETROS_DEFAULT`.
 """
+
+import inspect
 
 import pandas as pd
 import pytest
 
+from src.config import PARAMETROS_DEFAULT
 from src.motor.abc import clasificar_abc
 
 
@@ -297,3 +304,100 @@ def test_conserva_las_columnas_originales_y_agrega_clase_abc():
 def test_falta_una_columna_requerida_lanza_value_error():
     with pytest.raises(ValueError, match="producto_id"):
         clasificar_abc(pd.DataFrame({"costo_unitario": [1.0], "demanda_total": [1.0]}))
+
+
+# ------------------------------------------- umbrales configurables (fase 4)
+
+
+def test_los_defaults_de_los_umbrales_vienen_de_config():
+    """Sin argumentos se usan los umbrales de PARAMETROS_DEFAULT (80 y 95)."""
+    parametros = inspect.signature(clasificar_abc).parameters
+
+    assert parametros["umbral_clase_a"].default == (
+        PARAMETROS_DEFAULT["abc_clase_a_pct"]
+    )
+    assert parametros["umbral_clase_b"].default == (
+        PARAMETROS_DEFAULT["abc_clase_b_pct"]
+    )
+    # Y los valores de config siguen siendo los históricos del módulo.
+    assert PARAMETROS_DEFAULT["abc_clase_a_pct"] == 80.0
+    assert PARAMETROS_DEFAULT["abc_clase_b_pct"] == 95.0
+
+
+def test_los_defaults_dan_el_mismo_resultado_que_pasarlos_explicitos():
+    """No pasar umbrales equivale a pasar 80.0 y 95.0: nada cambió por defecto."""
+    catalogo = _por_valores([100.0, 80.0, 15.0, 5.0])
+
+    pd.testing.assert_frame_equal(
+        clasificar_abc(catalogo),
+        clasificar_abc(catalogo, umbral_clase_a=80.0, umbral_clase_b=95.0),
+    )
+
+
+def test_umbrales_custom_70_90_mueven_los_dos_cortes():
+    """Valores 75, 10, 8 y 7 (total 100) -> acumulados 75, 85, 93 y 100.
+
+    Con los umbrales por defecto el resultado es A, B, B, C. Al estrechar las
+    bandas a 70/90, el producto mayor deja de ser A (75 > 70) y el tercero deja
+    de ser B (93 > 90), así que el resultado pasa a ser B, B, C, C.
+    """
+    catalogo = _por_valores([75.0, 10.0, 8.0, 7.0])
+
+    assert clasificar_abc(catalogo)["clase_abc"].tolist() == ["A", "B", "B", "C"]
+
+    custom = clasificar_abc(catalogo, umbral_clase_a=70.0, umbral_clase_b=90.0)
+
+    assert custom["clase_abc"].tolist() == ["B", "B", "C", "C"]
+
+
+def test_umbrales_custom_70_90_respetan_las_fronteras_exactas():
+    """Acumulados exactos de 70 y de 90: 70 entra en A y 90 entra en B."""
+    catalogo = _por_valores([70.0, 20.0, 10.0])
+
+    resultado = clasificar_abc(catalogo, umbral_clase_a=70.0, umbral_clase_b=90.0)
+
+    assert resultado["clase_abc"].tolist() == ["A", "B", "C"]
+
+
+def test_umbral_100_en_los_dos_cortes_da_todo_clase_a():
+    """Caso borde: con 100/100 ningún acumulado supera el corte de A.
+
+    Valores 50, 30, 15 y 5 (total 100) -> acumulados 50, 80, 95 y 100, todos
+    <= 100, así que los cuatro productos son clase A (incluido el último, cuyo
+    acumulado es exactamente 100 %).
+    """
+    catalogo = _por_valores([50.0, 30.0, 15.0, 5.0])
+
+    resultado = clasificar_abc(catalogo, umbral_clase_a=100.0, umbral_clase_b=100.0)
+
+    assert resultado["clase_abc"].tolist() == ["A", "A", "A", "A"]
+
+
+def test_umbral_clase_a_cero_deja_la_banda_a_vacia():
+    """Caso borde: umbral_clase_a = 0 y umbral_clase_b = 100.
+
+    La comparación es contra el porcentaje *acumulado*, así que con
+    umbral_clase_a = 0 la banda A queda vacía: ningún acumulado positivo es
+    <= 0. Con 40, 30, 20 y 10 (acumulados 40, 70, 90 y 100) los cuatro productos
+    caen en B, porque el corte de B es 100 y ninguno lo supera.
+    """
+    catalogo = _por_valores([40.0, 30.0, 20.0, 10.0])
+
+    resultado = clasificar_abc(catalogo, umbral_clase_a=0.0, umbral_clase_b=100.0)
+
+    assert resultado["clase_abc"].tolist() == ["B", "B", "B", "B"]
+
+
+def test_umbral_clase_a_igual_al_mayor_producto_deja_en_a_solo_al_primero():
+    """Cómo dejar solo al producto de mayor valor en A: umbral_clase_a = 40.
+
+    Valores 40, 30, 20 y 10 (total 100) -> acumulados 40, 70, 90 y 100: solo el
+    primero entra en A (40 <= 40) y los tres restantes quedan en B (<= 100).
+    """
+    catalogo = _por_valores([40.0, 30.0, 20.0, 10.0])
+
+    resultado = clasificar_abc(catalogo, umbral_clase_a=40.0, umbral_clase_b=100.0)
+
+    assert resultado["clase_abc"].tolist() == ["A", "B", "B", "B"]
+    assert resultado["clase_abc"].tolist().count("A") == 1
+

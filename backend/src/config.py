@@ -76,8 +76,8 @@ TABLA_PARAMETROS: str = "parametros_configuracion"
 # Fuente única de verdad de los valores por defecto del sistema: los 10
 # parámetros de 'parametros_configuracion' (db/schema.sql) con sus valores
 # actuales, que coinciden con las constantes de los módulos del motor:
-#   abc_clase_a_pct           -> src.motor.abc.UMBRAL_CLASE_A
-#   abc_clase_b_pct           -> src.motor.abc.UMBRAL_CLASE_B
+#   Los umbrales de ABC (abc_clase_a_pct, abc_clase_b_pct) son consumidos por
+#   src.motor.abc.clasificar_abc a través de umbral_clase_a y umbral_clase_b
 #   ahorro_neto_min_pct       -> src.motor.ahorro.UMBRAL_AHORRO_PCT_DEFAULT
 #   cv_confianza_alta         -> src.motor.xyz.UMBRAL_X
 #   cv_confianza_media        -> src.motor.xyz.UMBRAL_Y
