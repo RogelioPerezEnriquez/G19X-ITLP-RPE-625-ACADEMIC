@@ -70,6 +70,7 @@ funciona con cualquier dataset que respete el esquema de `db/schema.sql`.
 ├── frontend/              Interfaz de usuario (Vue 3) [pendiente]
 ├── MVP.md                 Definición del producto mínimo viable
 ├── PRD_*.md               Documento de requisitos
+├── ESTADO_IMPLEMENTACION.md  Estado actual de la implementación
 └── PENDIENTES.md          Deuda técnica y notas de diseño
 ```
 
