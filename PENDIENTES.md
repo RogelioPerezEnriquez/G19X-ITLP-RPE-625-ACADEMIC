@@ -5,45 +5,24 @@ aspectos a revisar antes de cerrar el MVP.
 
 ## Deuda técnica
 
-- [ ] **Actualizar referencias en `config.py` al finalizar la parametrización**
-      - Frases que mencionan "constantes homólogas en el motor" quedarán
-        obsoletas cuando todos los módulos estén parametrizados.
-      - Revisar cuando terminen los 5 módulos del motor (abc, xyz,
-        demanda, proveedor, ahorro) y el evaluador.
-      - Líneas afectadas: `config.py:51` (docstring), `config.py:78`
-        (encabezado del comentario), `config.py:81` (referencia a
-        `UMBRAL_AHORRO_PCT_DEFAULT`), `config.py:82-84` (referencias a
-        `UMBRAL_X`/`UMBRAL_Y`/`VENTANA_DEFAULT` que ya no existen),
-        `config.py:87-88` (referencias a `UMBRAL_CONFIABLE`/`UMBRAL_RIESGOSO`).
-
-- [ ] **Duplicación de umbrales entre `evaluador.py` y `PARAMETROS_DEFAULT`**
-      - `evaluador.py` mantiene constantes locales que duplican los valores
-        de `PARAMETROS_DEFAULT`:
-        - `SCORE_CONFIABLE = 80.0` (duplica `score_proveedor_confiable`)
-        - `SCORE_RIESGOSO = 60.0` (duplica `score_proveedor_riesgoso`)
-        - `RATIO_MIN = 0.90` (duplica `eoq_min_pct / 100`)
-        - `RATIO_MAX = 1.10` (duplica `eoq_max_pct / 100`)
-        - `CV_ALTA = 0.5` (duplica `cv_confianza_alta`)
-        - `CV_MODERADA = 1.0` (duplica `cv_confianza_media`)
-        - `AHORRO_PCT = 0.03` (duplica `ahorro_neto_min_pct / 100`)
-      - Cuando se parametrice `evaluador.py`, eliminar estas constantes
-        y recibir los umbrales como parámetros.
-      - Comentarios obsoletos: `evaluador.py:172-173` (mencionan
-        `UMBRAL_X`/`UMBRAL_Y`), `evaluador.py:182` (menciona
-        `UMBRAL_AHORRO_PCT_DEFAULT`).
-
-- [ ] **Coherencia de umbrales entre `xyz.py` y `evaluador.py`**
-      - Los umbrales `cv_confianza_alta` y `cv_confianza_media` son usados
-        por dos módulos para dos propósitos distintos:
-        - `xyz.py`: clasificación X/Y/Z.
-        - `evaluador.py`: criterio 3 (confianza en la demanda).
-      - Hasta ahora los valores coincidían porque ambos tenían los mismos
-        hardcodeados. Con la parametrización de `xyz.py`, un cambio en
-        `config.py` **solo afecta a `xyz.py`**, no al evaluador.
-      - **Al parametrizar el evaluador**: el `recomendador.py` debe pasar
-        **los mismos valores** a `xyz.py` y a `evaluador.py` para
-        mantener la coherencia.
-      - Documentado en el docstring de `xyz.py`.
+- [ ] **Actualizar referencias obsoletas en `config.py`, `xyz.py` y `evaluador.py`**
+      - Quedan referencias a constantes que ya no existen (migradas a
+        `PARAMETROS_DEFAULT`).
+      - Líneas afectadas:
+        - `config.py:51` (docstring).
+        - `config.py:52-54`, `config.py:78` (encabezado del comentario).
+        - `config.py:81` (referencia a `UMBRAL_AHORRO_PCT_DEFAULT`).
+        - `config.py:82-84` (referencias a `UMBRAL_X`/`UMBRAL_Y`/
+          `VENTANA_DEFAULT`).
+        - `config.py:85-86` (referencias a `RATIO_MIN`/`RATIO_MAX`/
+          `CV_ALTA`/`CV_MODERADA`).
+        - `config.py:87-88` (referencias a `UMBRAL_CONFIABLE`/
+          `UMBRAL_RIESGOSO`).
+        - `motor/xyz.py:140-144` (referencias a `UMBRAL_X`/`UMBRAL_Y`).
+        - `evaluador.py:172-173` (referencias a `UMBRAL_X`/`UMBRAL_Y`).
+        - `evaluador.py:182` (referencia a `UMBRAL_AHORRO_PCT_DEFAULT`).
+      - Revisar al final de la fase de configurabilidad o durante la
+        limpieza final.
 
 - [ ] **Configurabilidad completa de parámetros** (post-MVP)
       - La tabla `parametros_configuracion` tiene 10 filas.
@@ -61,16 +40,6 @@ aspectos a revisar antes de cerrar el MVP.
         - `recomendador.py`: `URGENCIA_*`.
       - Si en el futuro se quiere configurabilidad total, añadir esos
         parámetros a la tabla.
-
-- [ ] **Conversión de unidades al pasar parámetros a los módulos**
-      - `eoq_min_pct` y `eoq_max_pct` están en % (90, 110) pero el
-        `evaluador.py` espera fracción (0.90, 1.10). El consumidor debe
-        dividir por 100.
-      - `demanda_ventana_default` llega como float (6.0) pero `demanda.py`
-        espera int. El consumidor debe convertir con `int(...)`.
-      - Resolver en el `evaluador.py` (pendiente) y en el `recomendador.py`
-        (ya resuelto para `demanda_ventana_default`).
-      - Documentado en el docstring de `config.py`.
 
 - [ ] **Validar `float('inf')` en `ahorro.py`** (menor)
       - Actualmente `umbral_ahorro_pct = float('inf')` pasa la validación
@@ -101,6 +70,17 @@ aspectos a revisar antes de cerrar el MVP.
 
 ## Resueltos
 
+- [x] **Parametrización completa de la fase de configurabilidad**
+      - Los 5 módulos del motor (abc, xyz, demanda, proveedor, ahorro)
+        reciben sus umbrales como parámetros con defaults de
+        `config.PARAMETROS_DEFAULT`.
+      - El `recomendador.py` lee los parámetros de Supabase y los propaga
+        al motor.
+      - El `evaluador.py` recibe los parámetros y aplica las conversiones
+        de unidades internamente.
+      - Cumple con RF-11 (el administrador puede modificar umbrales sin
+        tocar código).
+
 - [x] **Unificar validación de columnas entre módulos del motor**
       - `abc.py` era permisivo con DataFrames vacíos sin columnas.
       - Se corrigió para ser estricto como los demás módulos.
@@ -117,6 +97,9 @@ aspectos a revisar antes de cerrar el MVP.
   - `TOLERANCIA_CV` (xyz.py): 1e-9
   - `TOLERANCIA_SCORE` (proveedor.py): 1e-9
   - `TOLERANCIA_AHORRO` (ahorro.py): 1e-9
+  - `TOLERANCIA_RATIO`, `TOLERANCIA_CV`, `TOLERANCIA_SCORE`,
+    `TOLERANCIA_AHORRO` (evaluador.py): 1e-9 (los umbrales ya no son
+    constantes locales, pero las tolerancias se conservan).
 
 - **Año comercial de 360 días**: `eoq_rop.py` y `ahorro.py` usan 12
   periodos/año y 30 días/periodo por defecto, lo que implica un año de
@@ -170,6 +153,13 @@ aspectos a revisar antes de cerrar el MVP.
   `score`). Cambiar estos umbrales **no cambia** las recomendaciones
   generadas; solo cambia la clasificación de estados, que se usa en el
   evaluador (criterio 5) y se mostrará en el frontend.
+
+- **Conversiones de unidades en el consumidor**: cada módulo aplica las
+  conversiones de unidades que necesita:
+  - `recomendador.py`: `int(...)` para `demanda_ventana_default`.
+  - `evaluador.py`: `/100` para `eoq_min_pct`, `eoq_max_pct` y
+    `ahorro_neto_min_pct`.
+  El resto de umbrales se usan directamente en sus unidades de origen.
 
 ## Notas de configurabilidad
 
