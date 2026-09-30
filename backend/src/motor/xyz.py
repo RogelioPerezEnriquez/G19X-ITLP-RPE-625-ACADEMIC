@@ -138,10 +138,11 @@ def clasificar_xyz(
           primer corte; con ``umbral_x`` < 0 ningún producto es X salvo uno de
           desviación cero (CV = 0), que entra por :data:`TOLERANCIA_CV`.
         - El criterio 3 (confianza en la demanda) de :mod:`src.evaluador` usa
-          estos mismos cortes, pero hoy los tiene duplicados en sus constantes
-          ``CV_ALTA`` (0.5) y ``CV_MODERADA`` (1.0): pasar umbrales custom aquí
-          NO mueve la rúbrica del evaluador mientras ese módulo no lea sus
-          parámetros de configuración.
+          estos mismos cortes a través de los umbrales que recibe en su parámetro
+          ``parametros`` (las claves ``cv_confianza_alta`` y ``cv_confianza_media``
+          de :data:`src.config.PARAMETROS_DEFAULT`, resueltas como ``cv_alta`` y
+          ``cv_moderada``): pasar umbrales custom aquí NO mueve la rúbrica del
+          evaluador, que configura sus propios cortes por separado.
         - La salida es un DataFrame nuevo, con una fila por producto (no una
           copia de la entrada con una columna añadida), con un RangeIndex
           nuevo desde 0.

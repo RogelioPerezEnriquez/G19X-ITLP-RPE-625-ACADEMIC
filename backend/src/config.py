@@ -48,10 +48,12 @@ Casos borde
 Unidades
 --------
 Los ``*_pct`` de :data:`PARAMETROS_DEFAULT` están en **porcentaje** (80.0, 3.0),
-igual que sus constantes homólogas en el motor. Ojo con ``eoq_min_pct`` y
-``eoq_max_pct``: ``src.evaluador`` los usa como fracción (``RATIO_MIN``,
-``RATIO_MAX``), así que el módulo que los reciba debe dividirlos entre 100,
-como ya hace ``src.motor.ahorro`` con ``umbral_ahorro_pct``.
+que es la unidad que esperan los módulos del motor en sus respectivos
+parámetros. Ojo con ``eoq_min_pct`` y ``eoq_max_pct``: ``src.evaluador`` los
+recibe como fracción (los resuelve en ``ratio_min`` y ``ratio_max`` dentro de
+:func:`evaluar_recomendaciones`), así que el módulo que los reciba debe
+dividirlos entre 100, como ya hace ``src.motor.ahorro`` con su parámetro
+``umbral_ahorro_pct``.
 
 """
 
@@ -75,17 +77,18 @@ TABLA_PARAMETROS: str = "parametros_configuracion"
 
 # Fuente única de verdad de los valores por defecto del sistema: los 10
 # parámetros de 'parametros_configuracion' (db/schema.sql) con sus valores
-# actuales, que coinciden con las constantes de los módulos del motor:
-#   Los umbrales de ABC (abc_clase_a_pct, abc_clase_b_pct) son consumidos por
-#   src.motor.abc.clasificar_abc a través de umbral_clase_a y umbral_clase_b
-#   ahorro_neto_min_pct       -> src.motor.ahorro.UMBRAL_AHORRO_PCT_DEFAULT
-#   cv_confianza_alta         -> src.motor.xyz.UMBRAL_X
-#   cv_confianza_media        -> src.motor.xyz.UMBRAL_Y
-#   demanda_ventana_default   -> src.motor.demanda.VENTANA_DEFAULT
-#   eoq_max_pct               -> src.evaluador.RATIO_MAX (allí, fracción)
-#   eoq_min_pct               -> src.evaluador.RATIO_MIN (allí, fracción)
-#   score_proveedor_confiable -> src.motor.proveedor.UMBRAL_CONFIABLE
-#   score_proveedor_riesgoso  -> src.motor.proveedor.UMBRAL_RIESGOSO
+# actuales, que son consumidos por los módulos del motor a través de sus
+# respectivos parámetros:
+#   abc_clase_a_pct           -> umbral_clase_a de src.motor.abc.clasificar_abc
+#   abc_clase_b_pct           -> umbral_clase_b de src.motor.abc.clasificar_abc
+#   ahorro_neto_min_pct       -> umbral_ahorro_pct de src.motor.ahorro.calcular_ahorro
+#   cv_confianza_alta         -> umbral_x de src.motor.xyz.clasificar_xyz
+#   cv_confianza_media        -> umbral_y de src.motor.xyz.clasificar_xyz
+#   demanda_ventana_default   -> ventana de src.motor.demanda.estimar_demanda
+#   eoq_max_pct               -> ratio_max de src.evaluador.evaluar_recomendaciones (fracción)
+#   eoq_min_pct               -> ratio_min de src.evaluador.evaluar_recomendaciones (fracción)
+#   score_proveedor_confiable -> umbral_confiable de src.motor.proveedor.calcular_score_proveedor
+#   score_proveedor_riesgoso  -> umbral_riesgoso de src.motor.proveedor.calcular_score_proveedor
 PARAMETROS_DEFAULT: dict[str, float] = {
     "abc_clase_a_pct": 80.0,
     "abc_clase_b_pct": 95.0,
