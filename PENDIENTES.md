@@ -68,7 +68,8 @@ aspectos a revisar antes de cerrar el MVP.
         dividir por 100.
       - `demanda_ventana_default` llega como float (6.0) pero `demanda.py`
         espera int. El consumidor debe convertir con `int(...)`.
-      - Resolver en el `recomendador.py` cuando lea los parámetros.
+      - Resolver en el `evaluador.py` (pendiente) y en el `recomendador.py`
+        (ya resuelto para `demanda_ventana_default`).
       - Documentado en el docstring de `config.py`.
 
 - [ ] **Validar `float('inf')` en `ahorro.py`** (menor)
@@ -161,6 +162,14 @@ aspectos a revisar antes de cerrar el MVP.
   - `xyz.py`: `umbral_x`, `umbral_y`.
   - `ahorro.py`: `umbral_ahorro_pct`.
   - No aplica a `eoq_rop.py` (sus parámetros no están en la tabla).
+
+- **Cortes del score del proveedor no afectan al recomendador**: los
+  umbrales `score_proveedor_confiable` y `score_proveedor_riesgoso` se
+  propagan al módulo `proveedor.py`, pero su efecto (la columna `estado`)
+  no se usa en `recomendador.py` para elegir proveedor (solo se usa el
+  `score`). Cambiar estos umbrales **no cambia** las recomendaciones
+  generadas; solo cambia la clasificación de estados, que se usa en el
+  evaluador (criterio 5) y se mostrará en el frontend.
 
 ## Notas de configurabilidad
 
