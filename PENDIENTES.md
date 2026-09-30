@@ -49,6 +49,13 @@ aspectos a revisar antes de cerrar el MVP.
         campo `orden_criterio` a `evaluaciones_criterios`.
       - Revisar cuando se implemente el panel de explicabilidad.
 
+- [ ] **Replicar test guardián de constantes en los módulos del motor** (post-MVP)
+      - Actualmente solo `evaluador.py` tiene un test que verifica que las
+        constantes migradas no vuelvan al módulo.
+      - Replicar en `xyz.py`, `abc.py`, `demanda.py`, `proveedor.py`,
+        `ahorro.py`.
+      - Bajo costo, previene regresiones.
+
 ## Resueltos
 
 - [x] **Limpiar referencias obsoletas a constantes migradas**
@@ -61,6 +68,19 @@ aspectos a revisar antes de cerrar el MVP.
       - `xyz.py`: eliminadas 2 referencias a `CV_ALTA`/`CV_MODERADA`.
       - `evaluador.py`: ya estaba limpio (referencias eliminadas en el
         commit de parametrización del evaluador).
+
+- [x] **Verificación de referencias obsoletas en todo el repo**
+      - Búsqueda exhaustiva de 15 constantes migradas a configuración en
+        todos los archivos del repo (excepto `.git`).
+      - Resultado: 0 referencias reales en código de producción.
+      - Coincidencias encontradas (todas legítimas):
+        * Docstrings y comentarios que documentan la eliminación.
+        * Alias locales en tests que leen los defaults de `PARAMETROS_DEFAULT`
+          o de las firmas (patrón intencional).
+        * Test guardián en `test_evaluador.py` que verifica que las constantes
+          no vuelvan al módulo.
+      - Artefactos binarios (`.pyc`): 0 en `src/`, coincidencias solo en
+        `.pyc` de tests (regenerables, no versionados).
 
 - [x] **Parametrización completa de la fase de configurabilidad**
       - Los 5 módulos del motor (abc, xyz, demanda, proveedor, ahorro)
