@@ -211,6 +211,16 @@ aspectos a revisar antes de cerrar el MVP.
   alfabético). Si el frontend quiere mostrarlos en orden lógico, debe
   hacer un ORDER BY con CASE o guardar un campo `orden_criterio`.
 
+- **Verificación end-to-end de configurabilidad (RF-11)**: se verificó que
+  los parámetros de `parametros_configuracion` afectan los resultados del
+  motor:
+  - Prueba 1: bajar `abc_clase_a_pct` de 80 a 50 cambió la clase ABC de 3
+    productos (Widget B, Pintura 1L, Widget A pasaron de A a B).
+  - Prueba 2: subir `ahorro_neto_min_pct` de 3 a 10 redujo los productos
+    con "Ahorro detectado" de 2 a 0.
+  - Restauración: los 10 parámetros se restauraron a sus valores originales
+    y las tablas `recomendaciones`/`evaluaciones_criterios` quedaron vacías.
+
 ## Casos conocidos y documentados
 
 - **`descuento_pct = 0` en `ahorro.py`**: si un proveedor declara
