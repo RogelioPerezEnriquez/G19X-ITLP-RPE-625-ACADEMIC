@@ -72,7 +72,7 @@ funciona con cualquier dataset que respete el esquema de `db/schema.sql`.
 ├── PRD_*.md               Documento de requisitos
 ├── ESTADO_IMPLEMENTACION.md  Estado actual de la implementación
 ├── DECISIONES_DISENO.md      Decisiones de diseño del proyecto
-└── PENDIENTES.md          Deuda técnica y notas de diseño
+└── PENDIENTES.md          Deuda técnica
 ```
 
 ---
@@ -227,8 +227,8 @@ Agente conversacional (solo lectura) [pendiente]
 Interfaz (cola + explicabilidad + chat + KPIs) [pendiente]
 ```
 
-Ver `MVP.md` para detalle de cada componente y `PENDIENTES.md` para deuda
-técnica y notas de diseño.
+Ver `MVP.md` para detalle de cada componente, `PENDIENTES.md` para deuda
+técnica y `DECISIONES_DISENO.md` para decisiones de diseño.
 
 ---
 
