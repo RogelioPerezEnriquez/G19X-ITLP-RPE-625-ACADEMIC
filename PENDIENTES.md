@@ -1,9 +1,9 @@
 # Pendientes técnicos
 
-Este archivo registra deuda técnica y aspectos a revisar antes de cerrar el
-MVP.
+Este archivo registra decisiones que quedan abiertas, deuda técnica, y
+aspectos a revisar antes de cerrar el MVP.
 
-Para decisiones de diseño, ver DECISIONES_DISENO.md.
+Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
 
 ## Deuda técnica
 
@@ -29,6 +29,11 @@ Para decisiones de diseño, ver DECISIONES_DISENO.md.
         (solo se rechaza NaN y negativos).
       - Con `inf`, cualquier `ahorro_neto` queda "Sin oportunidad adicional".
       - Corregir añadiendo `math.isinf` a la validación.
+
+- [ ] **Validar `NaN`/`inf` en `eoq_rop.py`** (menor)
+      - Análogo al caso anterior pero para `margen_seguridad_pct`.
+      - El docstring ya documenta el comportamiento, pero el código sigue
+        aceptando esos valores y produce SS/ROP en NaN/inf.
 
 - [ ] **Ajustar el seed para alinear clases ABC/XYZ con el diseño original**
       (opcional, después del MVP)
@@ -59,6 +64,20 @@ Para decisiones de diseño, ver DECISIONES_DISENO.md.
       - Bajo costo, previene regresiones.
 
 ## Resueltos
+
+- [x] **Auditoría de docstrings y corrección de hallazgos**
+      - Auditoría completa de los 9 módulos de producción (con AST parsing,
+        referencias cruzadas a MVP.md, PRD, schema.sql y documentación interna).
+      - 32 hallazgos detectados, clasificados por tipo e impacto:
+        * 2 errores reales (indentación rota, afirmación falsa).
+        * 7 referencias obsoletas (numeración de pasos, frases sobre la
+          tabla de configuración "que se iba a incorporar" cuando ya existe).
+        * 3 faltantes (comportamiento de NaN/inf no documentado).
+        * 9 sugerencias de bajo impacto.
+        * 11 inconsistencias de estilo (transversales).
+      - 9 hallazgos corregidos (los de impacto alto/medio + los baratos).
+      - 23 hallazgos revisados y descartados (inconsistencias de estilo
+        consistentes por familia de módulos, sugerencias cosméticas).
 
 - [x] **Limpiar referencias obsoletas a constantes migradas**
       - `config.py`: eliminadas 10 referencias a constantes obsoletas
