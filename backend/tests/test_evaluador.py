@@ -1,17 +1,24 @@
 """Tests unitarios del evaluador de la rúbrica de 6 criterios (MVP.md §10).
 
-Solo se prueba la función pura ``src.evaluador.evaluar_recomendaciones``: no se
-toca red, base de datos ni archivos. Los dos últimos tests cubren la parte de
-E/S (``guardar_evaluaciones`` y ``evaluar_y_guardar``) con un cliente de Supabase
-falso en memoria, así que tampoco salen a la red.
+Se prueban la función pura ``src.evaluador.evaluar_recomendaciones`` (incluidos
+los parámetros de configuración de la fase 4) y la parte de E/S
+(``guardar_evaluaciones`` y ``evaluar_y_guardar``) con un cliente de Supabase
+falso en memoria: no se toca red, base de datos ni archivos.
+
+Los umbrales ya no son constantes de ``src.evaluador``: llegan en el argumento
+``parametros``, con las claves de :data:`src.config.PARAMETROS_DEFAULT` y en las
+unidades de la tabla de configuración. Los alias de este archivo (``RATIO_MIN``,
+``CV_ALTA``, ...) son los **defaults** con la conversión a fracción ya hecha, para
+escribir los casos de frontera una sola vez.
 """
 
 import numpy as np
 import pandas as pd
 import pytest
 
+import src.evaluador as evaluador_modulo
+from src.config import PARAMETROS_DEFAULT, TABLA_PARAMETROS
 from src.evaluador import (
-    AHORRO_PCT,
     COLUMNAS_REQUERIDAS,
     COLUMNAS_SALIDA,
     CRITERIO_AHORRO,
@@ -20,8 +27,6 @@ from src.evaluador import (
     CRITERIO_EFICIENCIA,
     CRITERIO_IMPORTANCIA,
     CRITERIO_RIESGO,
-    CV_ALTA,
-    CV_MODERADA,
     ESTADO_ACEPTABLE_CON_RESERVAS,
     ESTADO_ALTA_CONFIANZA,
     ESTADO_ATENCION,
@@ -40,10 +45,6 @@ from src.evaluador import (
     IMPORTANCIA_BAJA,
     IMPORTANCIA_MEDIA,
     ORDEN_CRITERIOS,
-    RATIO_MAX,
-    RATIO_MIN,
-    SCORE_CONFIABLE,
-    SCORE_RIESGOSO,
     TABLA_EVALUACIONES,
     TOLERANCIA_AHORRO,
     TOLERANCIA_CV,
@@ -53,6 +54,19 @@ from src.evaluador import (
     evaluar_y_guardar,
     guardar_evaluaciones,
 )
+
+# Umbrales por defecto de la rúbrica, leídos de la tabla de configuración con
+# las unidades ya normalizadas a las del módulo. Los tres '*_pct' van en
+# porcentaje en la tabla y aquí se pasan a fracción igual que el módulo
+# ('/ 100.0'): son los cortes con los que se escriben los casos de frontera de
+# este archivo, para no repetir la conversión en cada test.
+RATIO_MIN: float = PARAMETROS_DEFAULT["eoq_min_pct"] / 100.0
+RATIO_MAX: float = PARAMETROS_DEFAULT["eoq_max_pct"] / 100.0
+CV_ALTA: float = PARAMETROS_DEFAULT["cv_confianza_alta"]
+CV_MODERADA: float = PARAMETROS_DEFAULT["cv_confianza_media"]
+SCORE_CONFIABLE: float = PARAMETROS_DEFAULT["score_proveedor_confiable"]
+SCORE_RIESGOSO: float = PARAMETROS_DEFAULT["score_proveedor_riesgoso"]
+AHORRO_PCT: float = PARAMETROS_DEFAULT["ahorro_neto_min_pct"] / 100.0
 
 # Columnas de la salida, escritas explícitamente para que el contrato quede
 # fijado en el test y no se derive de la constante del módulo.
@@ -161,42 +175,96 @@ def _valor(resultado: pd.DataFrame, criterio: str, recomendacion_id: str = "R001
     return _fila(resultado, criterio, recomendacion_id)["valor_numerico"]
 
 
-class _ClienteFalso:
-    """Cliente de Supabase mínimo, en memoria: registra lo que se le pide."""
+def _filas_de_parametros(parametros: dict[str, float]) -> list[dict]:
+    """Filas verticales tal como las devuelve ``parametros_configuracion``.
 
-    def __init__(self) -> None:
+    La tabla tiene ``nombre_parametro | valor | descripcion``;
+    :func:`src.config.cargar_parametros` solo lee las dos primeras columnas, pero
+    el falso las sirve todas para que la forma de la respuesta sea la real.
+    """
+    return [
+        {
+            "nombre_parametro": nombre,
+            "valor": valor,
+            "descripcion": f"Descripción de {nombre}",
+        }
+        for nombre, valor in parametros.items()
+    ]
+
+
+class _RespuestaFalsa:
+    """Respuesta mínima de PostgREST: solo el atributo ``data``."""
+
+    def __init__(self, data: list[dict]) -> None:
+        self.data = data
+
+
+class _ClienteFalso:
+    """Cliente de Supabase mínimo, en memoria: registra lo que se le pide.
+
+    ``parametros`` son los valores que sirve la tabla de configuración cuando se
+    la lee; por defecto, los de :data:`src.config.PARAMETROS_DEFAULT`.
+    """
+
+    def __init__(self, parametros: dict[str, float] | None = None) -> None:
         self.tablas: list[str] = []
         self.insertados: list[dict] | None = None
         self.ejecutado: bool = False
+        # Lecturas de 'parametros_configuracion': así se comprueba que
+        # evaluar_y_guardar no hace la petición cuando ya recibe los parámetros.
+        self.lecturas_parametros: int = 0
+        self.filas_parametros: list[dict] = _filas_de_parametros(
+            PARAMETROS_DEFAULT if parametros is None else parametros
+        )
 
     def table(self, nombre: str) -> "_TablaFalsa":
         """Guarda el nombre de la tabla consultada y devuelve el constructor."""
         self.tablas.append(nombre)
-        return _TablaFalsa(self)
+        return _TablaFalsa(self, nombre)
 
 
 class _TablaFalsa:
-    """Constructor de consultas mínimo: solo ``insert(...).execute()``."""
+    """Constructor de consultas mínimo: ``select(...)`` e ``insert(...)``."""
 
-    def __init__(self, cliente: _ClienteFalso) -> None:
+    def __init__(self, cliente: "_ClienteFalso", nombre: str) -> None:
         self._cliente = cliente
+        self._nombre = nombre
+        self._seleccionado: bool = False
+
+    def select(self, columnas: str) -> "_TablaFalsa":
+        """Marca la consulta como lectura y devuelve el propio constructor."""
+        self._seleccionado = True
+        return self
 
     def insert(self, registros: list[dict]) -> "_TablaFalsa":
         """Guarda los registros que se quieren insertar."""
         self._cliente.insertados = registros
         return self
 
-    def execute(self) -> "_TablaFalsa":
-        """Marca que la petición se ejecutó."""
+    def execute(self) -> _RespuestaFalsa:
+        """Marca la petición como ejecutada y devuelve las filas de la tabla.
+
+        Solo la tabla de configuración tiene datos: es la única que este archivo
+        lee, y cada lectura queda contada en ``lecturas_parametros``.
+        """
         self._cliente.ejecutado = True
-        return self
+        if self._seleccionado and self._nombre == TABLA_PARAMETROS:
+            self._cliente.lecturas_parametros += 1
+            return _RespuestaFalsa(self._cliente.filas_parametros)
+        return _RespuestaFalsa([])
 
 
 # -------------------------------------------------------- constantes del módulo
 
 
 def test_las_constantes_del_modulo_son_las_esperadas():
-    """Criterios, umbrales, tolerancias, etiquetas y columnas quedan fijados."""
+    """Criterios, umbrales, tolerancias, etiquetas y columnas quedan fijados.
+
+    Los umbrales ya no son constantes del módulo: los alias de arriba son los
+    defaults de ``parametros_configuracion`` con la conversión a fracción hecha.
+    Aquí se fija además su valor **en crudo** (en porcentaje, como está en la
+    tabla), para que el contrato de las unidades quede escrito en un solo lugar.
+    """
     assert ORDEN_CRITERIOS == [
         "riesgo_quiebre_stock",
         "eficiencia_cantidad_eoq",
@@ -209,6 +277,11 @@ def test_las_constantes_del_modulo_son_las_esperadas():
     assert (CV_ALTA, CV_MODERADA) == (0.5, 1.0)
     assert (SCORE_CONFIABLE, SCORE_RIESGOSO) == (80.0, 60.0)
     assert AHORRO_PCT == 0.03
+    assert (
+        PARAMETROS_DEFAULT["eoq_min_pct"],
+        PARAMETROS_DEFAULT["eoq_max_pct"],
+        PARAMETROS_DEFAULT["ahorro_neto_min_pct"],
+    ) == (90.0, 110.0, 3.0)
     assert (
         TOLERANCIA_RATIO,
         TOLERANCIA_CV,
@@ -270,6 +343,24 @@ def test_las_constantes_del_modulo_son_las_esperadas():
         "Ahorro detectado",
         "Sin oportunidad adicional",
     )
+
+
+def test_el_modulo_ya_no_expone_los_umbrales_migrados_a_la_configuracion():
+    """La fase 4 se llevó los umbrales a ``config.py``: no quedan copias locales.
+
+    Si alguno de estos nombres volviera al módulo, habría dos fuentes de verdad
+    del mismo umbral y los parámetros custom podrían dejar de mandar.
+    """
+    for nombre in (
+        "RATIO_MIN",
+        "RATIO_MAX",
+        "CV_ALTA",
+        "CV_MODERADA",
+        "SCORE_CONFIABLE",
+        "SCORE_RIESGOSO",
+        "AHORRO_PCT",
+    ):
+        assert not hasattr(evaluador_modulo, nombre)
 
 
 # ------------------------------------------------------------- caso principal
@@ -709,6 +800,195 @@ def test_la_salida_esta_ordenada_por_recomendacion_id_y_criterio():
 
 
 
+# -------------------------------------- parámetros de configuración (fase 4)
+
+# Banda óptima del criterio 2 ampliada al 80 %-120 %. Se construye copiando los
+# defaults para no modificar la constante de config.py y para que quede claro que
+# solo cambian las dos claves del ratio. Los valores van en porcentaje, como en
+# la tabla de configuración.
+PARAMETROS_RATIO_AMPLIO: dict[str, float] = {
+    **PARAMETROS_DEFAULT,
+    "eoq_min_pct": 80.0,
+    "eoq_max_pct": 120.0,
+}
+
+
+@pytest.mark.parametrize(
+    "cantidad_recomendada, estado_por_defecto",
+    [
+        (85.0, ESTADO_PEDIDO_PEQUENO),  # ratio 0.85 < 0.90
+        (115.0, ESTADO_PEDIDO_EXCESIVO),  # ratio 1.15 > 1.10
+    ],
+)
+def test_parametros_custom_del_eoq_mueven_las_fronteras_del_ratio(
+    cantidad_recomendada: float, estado_por_defecto: str
+):
+    """Con eoq_min_pct=80 y eoq_max_pct=120, los ratios 0.85 y 1.15 son "Óptima".
+
+    Los parámetros se pasan en las unidades de la tabla (porcentaje, no
+    fracción): la conversión a fracción la hace el módulo.
+    """
+    entrada = _uno(cantidad_recomendada=cantidad_recomendada, cantidad_eoq=100.0)
+    copia = dict(PARAMETROS_RATIO_AMPLIO)
+
+    por_defecto = evaluar_recomendaciones(entrada)
+    ampliado = evaluar_recomendaciones(entrada, parametros=PARAMETROS_RATIO_AMPLIO)
+
+    ratio = cantidad_recomendada / 100.0
+    assert _valor(por_defecto, CRITERIO_EFICIENCIA) == pytest.approx(ratio)
+    assert _estado(por_defecto, CRITERIO_EFICIENCIA) == estado_por_defecto
+    assert _estado(ampliado, CRITERIO_EFICIENCIA) == ESTADO_OPTIMA
+    # Los umbrales se copian a variables locales: el dict del llamador no cambia.
+    assert PARAMETROS_RATIO_AMPLIO == copia
+
+
+@pytest.mark.parametrize(
+    "cambios, estado_por_defecto, estado_con_custom",
+    [
+        # Corte de "Alta confianza" a 0.7: el CV 0.6 deja de ser "Confianza
+        # moderada" y pasa a "Alta confianza".
+        (
+            {"cv_confianza_alta": 0.7},
+            ESTADO_CONFIANZA_MODERADA,
+            ESTADO_ALTA_CONFIANZA,
+        ),
+        # Corte de "Confianza moderada" a 0.4: el CV 0.6 se le escapa y pasa a
+        # "Baja confianza (revisión manual)".
+        (
+            {"cv_confianza_media": 0.4},
+            ESTADO_CONFIANZA_MODERADA,
+            ESTADO_BAJA_CONFIANZA,
+        ),
+    ],
+)
+def test_parametros_custom_del_cv_mueven_los_dos_cortes_de_confianza(
+    cambios: dict[str, float], estado_por_defecto: str, estado_con_custom: str
+):
+    """Con cv_confianza_alta=0.7 un CV de 0.6 pasa a "Alta confianza".
+
+    El segundo caso mueve el otro corte (``cv_confianza_media``): los dos
+    umbrales del criterio 3 salen de ``parametros``.
+    """
+    entrada = _uno(cv_demanda=0.6)
+    custom = {**PARAMETROS_DEFAULT, **cambios}
+
+    por_defecto = evaluar_recomendaciones(entrada)
+    ajustado = evaluar_recomendaciones(entrada, parametros=custom)
+
+    assert _estado(por_defecto, CRITERIO_CONFIANZA) == estado_por_defecto
+    assert _estado(ajustado, CRITERIO_CONFIANZA) == estado_con_custom
+    assert _valor(ajustado, CRITERIO_CONFIANZA) == 0.6
+
+
+@pytest.mark.parametrize(
+    "score_proveedor, cambios, estado_por_defecto, estado_con_custom",
+    [
+        # 75 es "Aceptable con reservas" (>= 60 y < 80) y pasa a "Riesgoso" si el
+        # corte estricto sube a 80.
+        (
+            75.0,
+            {"score_proveedor_riesgoso": 80.0},
+            ESTADO_ACEPTABLE_CON_RESERVAS,
+            ESTADO_RIESGOSO,
+        ),
+        # El corte de "Riesgoso" es estricto (< umbral): con el corte en 80 y el
+        # de "Confiable" en 90, un score de 80 exacto sigue siendo "Aceptable con
+        # reservas", no "Riesgoso". Con los defaults era "Confiable" (el corte de
+        # "Confiable" es inclusivo: >= 80).
+        (
+            80.0,
+            {"score_proveedor_confiable": 90.0, "score_proveedor_riesgoso": 80.0},
+            ESTADO_CONFIABLE,
+            ESTADO_ACEPTABLE_CON_RESERVAS,
+        ),
+    ],
+)
+def test_parametros_custom_del_score_del_proveedor_mueven_las_fronteras(
+    score_proveedor: float,
+    cambios: dict[str, float],
+    estado_por_defecto: str,
+    estado_con_custom: str,
+):
+    """Con score_proveedor_riesgoso=80, un score de 75 pasa a "Riesgoso".
+
+    Los dos cortes conservan su operador: ``>= score_proveedor_confiable`` es
+    inclusivo y ``< score_proveedor_riesgoso`` es estricto.
+    """
+    entrada = _uno(score_proveedor=score_proveedor)
+    parametros = {**PARAMETROS_DEFAULT, **cambios}
+
+    por_defecto = evaluar_recomendaciones(entrada)
+    ajustado = evaluar_recomendaciones(entrada, parametros=parametros)
+
+    assert _estado(por_defecto, CRITERIO_CONFIABILIDAD) == estado_por_defecto
+    assert _estado(ajustado, CRITERIO_CONFIABILIDAD) == estado_con_custom
+    assert _valor(ajustado, CRITERIO_CONFIABILIDAD) == score_proveedor
+
+
+def test_parametros_custom_del_ahorro_bajan_el_umbral_al_uno_por_ciento():
+    """Con ahorro_neto_min_pct=1.0 un ahorro del 2 % pasa a "Ahorro detectado".
+
+    El ahorro es 20.0 sobre un pedido de 1000.0: el umbral por defecto es 30.0
+    (3 % del pedido) y el custom, 10.0 (1 %).
+    """
+    entrada = _uno(ahorro_neto_estimado=20.0, costo_total_pedido=1000.0)
+    custom = {**PARAMETROS_DEFAULT, "ahorro_neto_min_pct": 1.0}
+
+    por_defecto = evaluar_recomendaciones(entrada)
+    relajado = evaluar_recomendaciones(entrada, parametros=custom)
+
+    assert _estado(por_defecto, CRITERIO_AHORRO) == ESTADO_SIN_OPORTUNIDAD
+    assert _estado(relajado, CRITERIO_AHORRO) == ESTADO_AHORRO_DETECTADO
+    assert _valor(relajado, CRITERIO_AHORRO) == 20.0
+
+
+def test_parametros_none_equivale_a_no_pasar_el_argumento_y_a_los_defaults():
+    """``parametros=None`` usa PARAMETROS_DEFAULT: mismo resultado, fila a fila."""
+    entrada = _dataframe(
+        [
+            _recomendacion(
+                "R001",
+                stock_actual=10.0,
+                cantidad_recomendada=150.0,
+                cv_demanda=0.9,
+                score_proveedor=65.0,
+                ahorro_neto_estimado=10.0,
+                clase_abc="C",
+                clase_xyz="Z",
+            ),
+            _recomendacion("R002"),
+        ]
+    )
+
+    sin_argumento = evaluar_recomendaciones(entrada)
+    con_none = evaluar_recomendaciones(entrada, parametros=None)
+    con_defaults = evaluar_recomendaciones(
+        entrada, parametros=dict(PARAMETROS_DEFAULT)
+    )
+
+    pd.testing.assert_frame_equal(sin_argumento, con_none)
+    pd.testing.assert_frame_equal(sin_argumento, con_defaults)
+
+
+def test_parametros_incompleto_con_dataframe_vacio_no_falla():
+    """Un dict incompleto solo falla si hay filas que evaluar.
+
+    Los umbrales se resuelven después de la validación y del caso vacío, así que
+    un DataFrame vacío con las columnas requeridas devuelve la salida vacía
+    aunque falten claves de configuración.
+    """
+    vacio = evaluar_recomendaciones(_vacio(), parametros={})
+
+    assert vacio.empty
+    assert list(vacio.columns) == list(COLUMNAS_ESPERADAS)
+
+
+def test_parametros_incompleto_con_filas_lanza_key_error_de_la_clave_ausente():
+    """Con filas que evaluar, una clave ausente falla explícitamente (KeyError)."""
+    with pytest.raises(KeyError, match="eoq_min_pct"):
+        evaluar_recomendaciones(_uno(), parametros={"cv_confianza_alta": 0.5})
+
+
 # ------------------------------------------------------------------ E/S
 
 
@@ -754,12 +1034,17 @@ def test_guardar_evaluaciones_convierte_nan_y_escalares_de_numpy_a_nativos():
 
 
 def test_evaluar_y_guardar_inserta_los_seis_criterios_con_valores_nativos():
-    """La conveniencia evalúa y escribe las 6 filas de la recomendación."""
+    """La conveniencia evalúa y escribe las 6 filas de la recomendación.
+
+    Sin ``parametros``, la primera tabla que consulta es la de configuración (los
+    lee de ahí) y la segunda, la de evaluaciones.
+    """
     cliente = _ClienteFalso()
 
     evaluar_y_guardar(cliente, _uno())
 
-    assert cliente.tablas == [TABLA_EVALUACIONES]
+    assert cliente.tablas == [TABLA_PARAMETROS, TABLA_EVALUACIONES]
+    assert cliente.lecturas_parametros == 1
     assert cliente.ejecutado
     registros = cliente.insertados
     assert registros is not None
@@ -776,3 +1061,46 @@ def test_evaluar_y_guardar_inserta_los_seis_criterios_con_valores_nativos():
     assert type(por_criterio[CRITERIO_RIESGO]) is float
     assert por_criterio[CRITERIO_IMPORTANCIA] is None
 
+
+def test_evaluar_y_guardar_carga_los_parametros_de_supabase_si_no_se_le_pasan():
+    """Sin ``parametros``, la conveniencia los lee de la tabla de configuración.
+
+    El cliente falso sirve una configuración con el corte de "Riesgoso" en 80, así
+    que la recomendación de score 75 queda "Riesgoso": ese estado solo puede
+    venir de los parámetros que se leyeron de Supabase.
+    """
+    cliente = _ClienteFalso(
+        parametros={**PARAMETROS_DEFAULT, "score_proveedor_riesgoso": 80.0}
+    )
+
+    evaluar_y_guardar(cliente, _uno(score_proveedor=75.0))
+
+    assert cliente.tablas == [TABLA_PARAMETROS, TABLA_EVALUACIONES]
+    assert cliente.lecturas_parametros == 1
+    registros = cliente.insertados
+    assert registros is not None
+    por_criterio = {
+        registro["criterio"]: registro["estado"] for registro in registros
+    }
+    assert por_criterio[CRITERIO_CONFIABILIDAD] == ESTADO_RIESGOSO
+
+
+def test_evaluar_y_guardar_no_carga_los_parametros_si_ya_se_le_pasan():
+    """Con ``parametros``, no se hace la lectura extra a Supabase.
+
+    Los umbrales pasados son los que se usan: la recomendación de score 75 queda
+    "Riesgoso" con el corte en 80, y la única tabla tocada es la de evaluaciones.
+    """
+    cliente = _ClienteFalso()
+    custom = {**PARAMETROS_DEFAULT, "score_proveedor_riesgoso": 80.0}
+
+    evaluar_y_guardar(cliente, _uno(score_proveedor=75.0), parametros=custom)
+
+    assert cliente.tablas == [TABLA_EVALUACIONES]
+    assert cliente.lecturas_parametros == 0
+    registros = cliente.insertados
+    assert registros is not None
+    por_criterio = {
+        registro["criterio"]: registro["estado"] for registro in registros
+    }
+    assert por_criterio[CRITERIO_CONFIABILIDAD] == ESTADO_RIESGOSO

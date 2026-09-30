@@ -57,19 +57,49 @@ lado inclusivo) al umbral, igual que :data:`~src.motor.abc.TOLERANCIA_PCT`,
 :data:`~src.motor.proveedor.TOLERANCIA_SCORE` y
 :data:`~src.motor.ahorro.TOLERANCIA_AHORRO`:
 
-* :data:`TOLERANCIA_RATIO` (1e-9): ``ratio < 0.90 - tol`` es "Pedido muy
-  pequeño" y ``ratio > 1.10 + tol`` es "Pedido excesivo"; el resto es "Óptima".
-* :data:`TOLERANCIA_CV` (1e-9): ``cv <= 0.5 + tol`` es "Alta confianza" y
-  ``cv <= 1.0 + tol`` es "Confianza moderada".
-* :data:`TOLERANCIA_SCORE` (1e-9): ``score >= 80 - tol`` es "Confiable" y
-  ``score < 60 - tol`` es "Riesgoso".
-* :data:`TOLERANCIA_AHORRO` (1e-9): ``ahorro_neto >= 0.03 *
-  costo_total_pedido - tol`` es "Ahorro detectado".
+* :data:`TOLERANCIA_RATIO` (1e-9): ``ratio < eoq_min_pct / 100 - tol`` es
+  "Pedido muy pequeño" y ``ratio > eoq_max_pct / 100 + tol`` es "Pedido
+  excesivo"; el resto es "Óptima". Con los defaults (90 % y 110 %), los cortes
+  son 0.90 y 1.10.
+* :data:`TOLERANCIA_CV` (1e-9): ``cv <= cv_confianza_alta + tol`` es "Alta
+  confianza" y ``cv <= cv_confianza_media + tol`` es "Confianza moderada"; con
+  los defaults, los cortes son 0.5 y 1.0.
+* :data:`TOLERANCIA_SCORE` (1e-9): ``score >= score_proveedor_confiable - tol``
+  es "Confiable" y ``score < score_proveedor_riesgoso - tol`` es "Riesgoso";
+  con los defaults, los cortes son 80 y 60.
+* :data:`TOLERANCIA_AHORRO` (1e-9): ``ahorro_neto >= ahorro_neto_min_pct / 100
+  * costo_total_pedido - tol`` es "Ahorro detectado"; con el default del 3 %,
+  el umbral es 0.03 x el costo total del pedido.
 
 El criterio 1 (riesgo de quiebre) compara ``stock_actual`` con
 ``stock_seguridad`` y ``punto_reorden`` **sin** tolerancia: el alcance de esta
 sesión define tolerancias para los cuatro criterios anteriores, así que sus
 cortes se evalúan tal cual los enuncia ``MVP.md`` §10.
+
+Parámetros de configuración (fase 4)
+------------------------------------
+Los umbrales de corte de la rúbrica **no** viven en este módulo: llegan como el
+argumento ``parametros`` de :func:`evaluar_recomendaciones`, con las claves de
+:data:`src.config.PARAMETROS_DEFAULT`.
+
+* ``eoq_min_pct`` y ``eoq_max_pct`` (criterio 2) y ``ahorro_neto_min_pct``
+  (criterio 6): en la tabla de configuración están en **porcentaje** (90.0,
+  110.0, 3.0) y este módulo los convierte a **fracción** (``/ 100.0``) al
+  resolverlos, igual que :mod:`src.motor.ahorro` con ``umbral_ahorro_pct``. La
+  conversión la hace el módulo que consume el parámetro, coherente con
+  :func:`src.config.cargar_parametros`, que devuelve los valores tal cual están
+  en la tabla.
+* ``cv_confianza_alta`` y ``cv_confianza_media`` (criterio 3) y
+  ``score_proveedor_confiable`` y ``score_proveedor_riesgoso`` (criterio 5): se
+  usan tal cual, sin conversión, porque su unidad ya es la del umbral.
+* ``parametros=None`` significa "usar los defaults del sistema"
+  (:data:`src.config.PARAMETROS_DEFAULT`), que son los valores históricos de la
+  rúbrica: el llamador que no pase nada obtiene el mismo comportamiento de
+  siempre. Las claves que este módulo no indexa (``abc_*``,
+  ``demanda_ventana_default``) se ignoran.
+* Un dict incompleto pasado a mano falla con ``KeyError`` en la clave que falte
+  (no se completa en silencio con los defaults), igual que en
+  :func:`src.recomendador.calcular_recomendaciones`.
 
 Estrategia de construcción de la salida
 ---------------------------------------
@@ -127,6 +157,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from src.config import PARAMETROS_DEFAULT, cargar_parametros
+
 if TYPE_CHECKING:  # pragma: no cover - solo para las anotaciones de tipo
     # El cliente se importa solo para el chequeo de tipos: así el módulo (y los
     # tests de su función pura) no dependen del paquete 'supabase' en tiempo de
@@ -163,30 +195,18 @@ ORDEN_CRITERIOS: list[str] = [
 
 # ------------------------------------------------------------------ umbrales
 
-# Umbrales de corte de la rúbrica. Fuente única de verdad: cuando el MVP
-# incorpore la tabla de configuración (fase 4), estos serán sus valores por
-# defecto.
-# Criterio 2: cantidad recomendada / cantidad EOQ.
-RATIO_MIN: float = 0.90
-RATIO_MAX: float = 1.10
-# Criterio 3: coeficiente de variación de la demanda (los mismos cortes que
-# UMBRAL_X y UMBRAL_Y de src.motor.xyz).
-CV_ALTA: float = 0.5
-CV_MODERADA: float = 1.0
-# Criterio 5: score de confiabilidad del proveedor (los mismos cortes que
-# UMBRAL_CONFIABLE y UMBRAL_RIESGOSO de src.motor.proveedor).
-SCORE_CONFIABLE: float = 80.0
-SCORE_RIESGOSO: float = 60.0
-# Criterio 6: 3 % del costo total del pedido, expresado como fracción porque se
-# multiplica directamente por el costo (3 % = 0.03). Ojo con la diferencia de
-# unidad: src.motor.ahorro define UMBRAL_AHORRO_PCT_DEFAULT = 3.0 porque allí se
-# divide entre 100.
-AHORRO_PCT: float = 0.03
+# Los umbrales de corte de la rúbrica (ratio del EOQ, CV de la demanda, score
+# del proveedor y ahorro mínimo) ya no son constantes de este módulo: llegan en
+# el argumento 'parametros' de evaluar_recomendaciones, con las claves de
+# src.config.PARAMETROS_DEFAULT, y este módulo aplica las conversiones de unidad
+# que necesitan (ver el docstring del módulo). Los valores por defecto son los
+# de la tabla 'parametros_configuracion'.
 
 # Tolerancias al comparar contra los umbrales. Absorben el ruido de punto
 # flotante en los cortes exactos, con el mismo criterio (y el mismo valor) que
 # TOLERANCIA_PCT (abc.py), TOLERANCIA_CV (xyz.py), TOLERANCIA_SCORE
-# (proveedor.py) y TOLERANCIA_AHORRO (ahorro.py).
+# (proveedor.py) y TOLERANCIA_AHORRO (ahorro.py). No son umbrales configurables:
+# son la precisión con la que se comparan.
 TOLERANCIA_RATIO: float = 1e-9
 TOLERANCIA_CV: float = 1e-9
 TOLERANCIA_SCORE: float = 1e-9
@@ -277,7 +297,10 @@ TABLA_EVALUACIONES: str = "evaluaciones_criterios"
 
 
 
-def evaluar_recomendaciones(recomendaciones: pd.DataFrame) -> pd.DataFrame:
+def evaluar_recomendaciones(
+    recomendaciones: pd.DataFrame,
+    parametros: dict[str, float] | None = None,
+) -> pd.DataFrame:
     """
     Aplica la rúbrica de 6 criterios a cada recomendación de compra.
 
@@ -290,6 +313,22 @@ def evaluar_recomendaciones(recomendaciones: pd.DataFrame) -> pd.DataFrame:
             ``cv_demanda``, ``clase_abc``, ``clase_xyz``, ``score_proveedor``,
             ``ahorro_neto_estimado`` y ``costo_total_pedido``. Las columnas
             extra se ignoran.
+        parametros: dict[str, float] | None = None. Diccionario con los
+            parámetros de configuración de los que salen los umbrales de la
+            rúbrica. Si es None, se usa
+            :data:`src.config.PARAMETROS_DEFAULT`. Las claves esperadas son las
+            de :data:`src.config.PARAMETROS_DEFAULT`; este módulo indexa
+            ``eoq_min_pct`` y ``eoq_max_pct`` (cortes de
+            ``eficiencia_cantidad_eoq``), ``cv_confianza_alta`` y
+            ``cv_confianza_media`` (cortes de ``confianza_demanda``),
+            ``score_proveedor_confiable`` y ``score_proveedor_riesgoso`` (cortes
+            de ``confiabilidad_proveedor``) y ``ahorro_neto_min_pct`` (umbral de
+            ``oportunidad_ahorro``). Los parámetros que están en porcentaje se
+            convierten a fracción aquí dentro (``/ 100.0``), porque en la tabla
+            están en porcentaje: ver "Parámetros de configuración (fase 4)" en
+            el docstring del módulo. Las claves que este módulo no indexa
+            (``abc_clase_a_pct``, ``abc_clase_b_pct``,
+            ``demanda_ventana_default``) se ignoran.
 
     Returns:
         DataFrame con una fila por ``(recomendacion_id, criterio)`` -- 6 filas
@@ -305,39 +344,49 @@ def evaluar_recomendaciones(recomendaciones: pd.DataFrame) -> pd.DataFrame:
           ``stock_actual > punto_reorden``.
         - Criterio 2, ``eficiencia_cantidad_eoq``: con
           ``ratio = cantidad_recomendada / cantidad_eoq``, "Pedido muy pequeño"
-          si ``ratio < RATIO_MIN - TOLERANCIA_RATIO``, "Óptima" si está dentro
-          del rango (incluidas las fronteras 0.90 y 1.10) y "Pedido excesivo" si
-          ``ratio > RATIO_MAX + TOLERANCIA_RATIO``.
+          si ``ratio < eoq_min_pct / 100 - TOLERANCIA_RATIO``, "Óptima" si está
+          dentro del rango (incluidas las fronteras del parámetro) y "Pedido
+          excesivo" si ``ratio > eoq_max_pct / 100 + TOLERANCIA_RATIO``.
         - Criterio 3, ``confianza_demanda``: "Alta confianza" si
-          ``cv_demanda <= CV_ALTA + TOLERANCIA_CV``, "Confianza moderada" si
-          ``cv_demanda <= CV_MODERADA + TOLERANCIA_CV`` y "Baja confianza
-          (revisión manual)" en el resto.
+          ``cv_demanda <= cv_confianza_alta + TOLERANCIA_CV``, "Confianza
+          moderada" si ``cv_demanda <= cv_confianza_media + TOLERANCIA_CV`` y
+          "Baja confianza (revisión manual)" en el resto.
         - Criterio 4, ``importancia_producto``: tabla de doble entrada
           :data:`IMPORTANCIA_POR_CLASE` sobre ``(clase_abc, clase_xyz)``.
         - Criterio 5, ``confiabilidad_proveedor``: "Confiable" si
-          ``score_proveedor >= SCORE_CONFIABLE - TOLERANCIA_SCORE``, "Riesgoso"
-          si ``score_proveedor < SCORE_RIESGOSO - TOLERANCIA_SCORE`` y
-          "Aceptable con reservas" en el resto.
+          ``score_proveedor >= score_proveedor_confiable - TOLERANCIA_SCORE``,
+          "Riesgoso" si ``score_proveedor < score_proveedor_riesgoso -
+          TOLERANCIA_SCORE`` y "Aceptable con reservas" en el resto.
         - Criterio 6, ``oportunidad_ahorro``: "Ahorro detectado" si
-          ``ahorro_neto_estimado >= costo_total_pedido * AHORRO_PCT -
-          TOLERANCIA_AHORRO`` y "Sin oportunidad adicional" en el resto.
+          ``ahorro_neto_estimado >= costo_total_pedido * ahorro_neto_min_pct /
+          100 - TOLERANCIA_AHORRO`` y "Sin oportunidad adicional" en el resto.
 
     Notas:
         - La función es pura: no accede a red, base de datos ni archivos, no
           imprime ni registra nada y **no modifica** ``recomendaciones`` (solo
           se lee y se seleccionan columnas; todo el cálculo se hace con arrays
-          de numpy).
+          de numpy). Tampoco modifica ``parametros``, y no los lee de Supabase:
+          los carga :func:`evaluar_y_guardar`.
         - ``valor_numerico`` es ``None`` para ``importancia_producto`` (criterio
           categórico puro) y el valor calculado para los otros cinco criterios.
         - Orden de ejecución: (1) validar las columnas requeridas, (2) si el
-          DataFrame está vacío devolver la salida vacía, (3) si hay filas
-          evaluar los seis criterios.
+          DataFrame está vacío devolver la salida vacía, (3) resolver los
+          umbrales desde ``parametros``, (4) evaluar los seis criterios. Los
+          umbrales se resuelven después de la validación y del caso vacío para
+          que un ``parametros`` incompleto solo falle cuando de verdad haya algo
+          que evaluar.
 
     Raises:
         ValueError: si falta alguna columna de :data:`COLUMNAS_REQUERIDAS`,
             tenga o no filas el DataFrame.
         ValueError: si alguna fila trae una combinación ``clase_abc`` x
             ``clase_xyz`` fuera de la tabla del criterio 4.
+        KeyError: si ``parametros`` no trae alguna de las claves de umbral que
+            este módulo indexa. No se verifica aquí con
+            :func:`src.config.verificar_parametros`: cuando el dict viene de
+            Supabase, :func:`src.config.cargar_parametros` ya lo verifica, y un
+            dict incompleto pasado a mano debe fallar, no completarse en
+            silencio con los defaults.
     """
 
 
@@ -349,6 +398,26 @@ def evaluar_recomendaciones(recomendaciones: pd.DataFrame) -> pd.DataFrame:
     # vacía con el mismo contrato (columnas, dtypes y categórica ordenada).
     if recomendaciones.empty:
         return _resultado_vacio()
+
+    # --- Umbrales de la rúbrica -------------------------------------------------
+    # Salen de la configuración de la fase 4: None significa "los defaults del
+    # sistema", que son los valores históricos de la rúbrica. La función no los
+    # lee de Supabase (sigue siendo pura) y no modifica el dict: las conversiones
+    # de unidad se guardan en variables locales.
+    if parametros is None:
+        parametros = PARAMETROS_DEFAULT
+
+    # Conversiones de unidad (preservan la semántica del código anterior): la
+    # tabla de configuración trae los porcentajes (90.0, 110.0, 3.0) y los cortes
+    # se comparan contra fracciones (0.90, 1.10, 0.03). Los cortes del CV y del
+    # score ya están en la unidad del umbral y se usan tal cual.
+    ratio_min: float = parametros["eoq_min_pct"] / 100.0
+    ratio_max: float = parametros["eoq_max_pct"] / 100.0
+    cv_alta: float = parametros["cv_confianza_alta"]
+    cv_moderada: float = parametros["cv_confianza_media"]
+    score_confiable: float = parametros["score_proveedor_confiable"]
+    score_riesgoso: float = parametros["score_proveedor_riesgoso"]
+    ahorro_pct: float = parametros["ahorro_neto_min_pct"] / 100.0
 
     # Selección de las columnas que participan del cálculo. Nunca se asigna
     # sobre el argumento: la entrada no se toca.
@@ -398,12 +467,12 @@ def evaluar_recomendaciones(recomendaciones: pd.DataFrame) -> pd.DataFrame:
     with np.errstate(divide="ignore", invalid="ignore"):
         ratio: np.ndarray = cantidad_recomendada / cantidad_eoq
 
-    # La banda tolerada [0.90 - tol, 1.10 + tol] es "Óptima" y va como default,
-    # para no repetir la condición del intervalo.
+    # La banda tolerada [ratio_min - tol, ratio_max + tol] es "Óptima" y va como
+    # default, para no repetir la condición del intervalo.
     estados_eficiencia: np.ndarray = np.select(
         [
-            ratio < RATIO_MIN - TOLERANCIA_RATIO,
-            ratio > RATIO_MAX + TOLERANCIA_RATIO,
+            ratio < ratio_min - TOLERANCIA_RATIO,
+            ratio > ratio_max + TOLERANCIA_RATIO,
         ],
         [
             ESTADO_PEDIDO_PEQUENO,
@@ -416,8 +485,8 @@ def evaluar_recomendaciones(recomendaciones: pd.DataFrame) -> pd.DataFrame:
     # Mismos cortes (y misma tolerancia) que la clasificación XYZ del motor.
     estados_confianza: np.ndarray = np.select(
         [
-            cv_demanda <= CV_ALTA + TOLERANCIA_CV,
-            cv_demanda <= CV_MODERADA + TOLERANCIA_CV,
+            cv_demanda <= cv_alta + TOLERANCIA_CV,
+            cv_demanda <= cv_moderada + TOLERANCIA_CV,
         ],
         [
             ESTADO_ALTA_CONFIANZA,
@@ -431,13 +500,14 @@ def evaluar_recomendaciones(recomendaciones: pd.DataFrame) -> pd.DataFrame:
 
 
     # --- Criterio 5: confiabilidad del proveedor -------------------------------
-    # 'Aceptable con reservas' (el intervalo [60, 80)) va como default. Los
-    # umbrales llevan la tolerancia en el lado inclusivo: >= 80 es confiable y
-    # < 60 es riesgoso.
+    # 'Aceptable con reservas' (el intervalo [score_riesgoso, score_confiable)) va
+    # como default. Los umbrales llevan la tolerancia en el lado inclusivo: el
+    # score mayor o igual al parámetro confiable es confiable y el estrictamente
+    # menor que el parámetro riesgoso, riesgoso.
     estados_confiabilidad: np.ndarray = np.select(
         [
-            score_proveedor >= SCORE_CONFIABLE - TOLERANCIA_SCORE,
-            score_proveedor < SCORE_RIESGOSO - TOLERANCIA_SCORE,
+            score_proveedor >= score_confiable - TOLERANCIA_SCORE,
+            score_proveedor < score_riesgoso - TOLERANCIA_SCORE,
         ],
         [
             ESTADO_CONFIABLE,
@@ -447,9 +517,9 @@ def evaluar_recomendaciones(recomendaciones: pd.DataFrame) -> pd.DataFrame:
     )
 
     # --- Criterio 6: oportunidad de ahorro por volumen -------------------------
-    # El umbral es el 3 % del costo total del pedido, con la tolerancia restada
-    # para absorber el ruido de punto flotante del corte.
-    umbral_ahorro: np.ndarray = costo_total_pedido * AHORRO_PCT
+    # El umbral es 'ahorro_neto_min_pct' del costo total del pedido, con la
+    # tolerancia restada para absorber el ruido de punto flotante del corte.
+    umbral_ahorro: np.ndarray = costo_total_pedido * ahorro_pct
     estados_ahorro: np.ndarray = np.select(
         [ahorro_neto_estimado >= umbral_ahorro - TOLERANCIA_AHORRO],
         [ESTADO_AHORRO_DETECTADO],
@@ -580,12 +650,13 @@ def guardar_evaluaciones(
 def evaluar_y_guardar(
     supabase_client: "Client",
     recomendaciones: pd.DataFrame,
+    parametros: dict[str, float] | None = None,
 ) -> None:
     """
     Aplica la rúbrica y guarda las evaluaciones en Supabase, en una sola llamada.
 
     Es una conveniencia para el llamador: equivale a
-    ``guardar_evaluaciones(supabase_client, evaluar_recomendaciones(recomendaciones))``
+    ``guardar_evaluaciones(supabase_client, evaluar_recomendaciones(recomendaciones, parametros=parametros))``
     y existe para no tener que encadenar las dos funciones (y no confundir el
     orden de los argumentos) en los scripts y en la fase de integración. No
     agrega lógica: la evaluación la hace :func:`evaluar_recomendaciones` y la
@@ -597,13 +668,24 @@ def evaluar_y_guardar(
         recomendaciones: DataFrame de recomendaciones **ya persistidas**, con las
             columnas de :data:`COLUMNAS_REQUERIDAS` y con ``recomendacion_id``
             (UUID de la tabla ``recomendaciones``) asignado por el llamador.
+        parametros: dict[str, float] | None = None. Parámetros de configuración
+            de los umbrales de la rúbrica (las claves de
+            :data:`src.config.PARAMETROS_DEFAULT`; ver
+            :func:`evaluar_recomendaciones`). Si es None, los lee de la tabla
+            ``parametros_configuracion`` con
+            :func:`src.config.cargar_parametros`; si ya vienen resueltos, se usan
+            tal cual y **no** se hace esa lectura extra, que sería una petición
+            innecesaria a Supabase (el caso de un llamador que ya cargó los
+            parámetros para el recomendador).
 
     Returns:
         None.
 
     Notas:
         - Un DataFrame de recomendaciones vacío no genera ninguna petición: la
-          evaluación sale vacía y el guardado la ignora.
+          evaluación sale vacía y el guardado la ignora. Con ``parametros=None``
+          los parámetros sí se leen antes de evaluar, porque la lectura no
+          depende de las recomendaciones.
         - Los errores de validación de :func:`evaluar_recomendaciones` y los de
           la API de Supabase se propagan tal cual.
 
@@ -611,8 +693,21 @@ def evaluar_y_guardar(
         ValueError: si a ``recomendaciones`` le falta alguna columna de
             :data:`COLUMNAS_REQUERIDAS` o si trae una combinación ABC/XYZ fuera
             de la tabla del criterio 4.
+        ValueError: si ``parametros`` es None y a la tabla
+            ``parametros_configuracion`` le falta algún parámetro esperado
+            (incluida la tabla vacía); lo lanza
+            :func:`src.config.cargar_parametros`.
     """
-    evaluaciones: pd.DataFrame = evaluar_recomendaciones(recomendaciones)
+    if parametros is None:
+        # La carga desde Supabase es E/S y vive aquí, no en la función pura: se
+        # leen una sola vez y se pasan ya resueltos, para que
+        # evaluar_recomendaciones siga siendo pura. Si el llamador ya los trae,
+        # no se hace la petición.
+        parametros = cargar_parametros(supabase_client)
+
+    evaluaciones: pd.DataFrame = evaluar_recomendaciones(
+        recomendaciones, parametros=parametros
+    )
     guardar_evaluaciones(supabase_client, evaluaciones)
 
 
