@@ -71,6 +71,7 @@ funciona con cualquier dataset que respete el esquema de `db/schema.sql`.
 ├── MVP.md                 Definición del producto mínimo viable
 ├── PRD_*.md               Documento de requisitos
 ├── ESTADO_IMPLEMENTACION.md  Estado actual de la implementación
+├── DECISIONES_DISENO.md      Decisiones de diseño del proyecto
 └── PENDIENTES.md          Deuda técnica y notas de diseño
 ```
 
