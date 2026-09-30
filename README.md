@@ -72,7 +72,8 @@ funciona con cualquier dataset que respete el esquema de `db/schema.sql`.
 ├── PRD_*.md               Documento de requisitos
 ├── ESTADO_IMPLEMENTACION.md  Estado actual de la implementación
 ├── DECISIONES_DISENO.md      Decisiones de diseño del proyecto
-└── PENDIENTES.md          Deuda técnica
+├── PENDIENTES.md          Deuda técnica
+└── VERIFICACION.md           Guía de verificación del sistema
 ```
 
 ---
@@ -164,6 +165,8 @@ python -m pytest -q
 ```
 
 Todos los tests deben pasar.
+
+Ver `VERIFICACION.md` para la guía completa de verificación.
 
 ---
 

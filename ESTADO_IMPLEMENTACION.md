@@ -358,6 +358,8 @@ solo puede leer, que `service_role` puede escribir y que la API del LLM responde
 - Ver `MVP.md` para la especificación del producto (alcance, requisitos,
   rúbrica de 6 criterios y modelo de datos).
 - Ver `README.md` para setup e instalación.
+- Ver `VERIFICACION.md` para la guía de verificación del sistema (comandos y
+  resultados esperados nivel por nivel).
 - Ver `PENDIENTES.md` para deuda técnica y `DECISIONES_DISENO.md` para las
   decisiones de diseño.
 - Ver `PRD_Sistema_Optimizacion_Compras.md` para el documento de requisitos

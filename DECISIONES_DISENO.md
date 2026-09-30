@@ -10,8 +10,9 @@ consecuencias.
 **Alcance.** Recoge solo lo que no se deduce del código ni de la
 especificación. La definición del producto (alcance, requisitos, rúbrica de 6
 criterios y modelo de datos) está en `MVP.md`; el estado de lo construido y
-verificado, en `ESTADO_IMPLEMENTACION.md`; y la deuda técnica abierta, en
-`PENDIENTES.md`. Cuando hace falta ese nivel de detalle, este documento
+verificado, en `ESTADO_IMPLEMENTACION.md`; la deuda técnica abierta, en
+`PENDIENTES.md`; y la guía para comprobar que el sistema funciona, en
+`VERIFICACION.md`. Cuando hace falta ese nivel de detalle, este documento
 referencia esos archivos en lugar de repetir su contenido.
 
 **Cómo leerlo.** Las decisiones `D-01` a `D-10` son las que afectan el
