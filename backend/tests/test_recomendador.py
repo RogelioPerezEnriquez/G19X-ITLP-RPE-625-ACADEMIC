@@ -1,15 +1,21 @@
 """Tests unitarios del orquestador de recomendaciones (motor OR).
 
-Solo se prueba la función pura ``src.recomendador.calcular_recomendaciones``: no
-se toca red, base de datos ni archivos. ``generar_recomendaciones`` y
-``guardar_recomendaciones`` sí hablan con Supabase y se cubren en la fase de
-integración, con el cliente mockeado.
+Se prueba la función pura ``src.recomendador.calcular_recomendaciones`` (incluida
+la propagación de los parámetros de configuración a cada módulo del motor) y, con
+un cliente de Supabase falso en memoria, ``generar_recomendaciones`` (la lectura
+de las cuatro tablas de datos y de ``parametros_configuracion``). No se toca red,
+base de datos ni archivos. ``guardar_recomendaciones`` sí escribe en Supabase y se
+cubre en la fase de integración, con el cliente mockeado.
 """
+
+import inspect
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from src.config import PARAMETROS_DEFAULT
+from src.motor.proveedor import calcular_score_proveedor
 from src.recomendador import (
     COLUMNAS_HISTORIAL,
     COLUMNAS_NO_NULAS,
@@ -22,6 +28,7 @@ from src.recomendador import (
     URGENCIA_CRITICO,
     URGENCIA_SIN_RIESGO,
     calcular_recomendaciones,
+    generar_recomendaciones,
 )
 
 # Columnas de la salida, escritas explícitamente para que el contrato quede
@@ -725,4 +732,296 @@ def test_el_ahorro_usa_el_mismo_periodos_por_año_que_el_eoq():
     assert con_seis.loc[0, "costo_extra_mantener"] == pytest.approx(
         (500.0 - eoq_seis) * 10.0 * 0.20 / 6.0
     )
+
+
+# ------------------------------------------------- parámetros de configuración
+
+
+def _parametros_custom(**cambios: float) -> dict[str, float]:
+    """Los defaults del sistema con los cambios indicados.
+
+    Devuelve un dict nuevo: los tests no mutan ``PARAMETROS_DEFAULT``.
+    """
+    return {**PARAMETROS_DEFAULT, **cambios}
+
+
+def test_parametros_va_despues_de_historial_demanda_y_antes_de_eoq_rop():
+    """El orden de la firma no rompe las llamadas posicionales existentes.
+
+    ``parametros`` es el quinto argumento, no el último: los tres parámetros de
+    eoq_rop (que no se configuran desde la tabla) mantienen su posición y una
+    llamada posicional con las cuatro tablas sigue funcionando.
+    """
+    parametros_firma = list(inspect.signature(calcular_recomendaciones).parameters)
+
+    assert parametros_firma == [
+        "productos",
+        "proveedores",
+        "producto_proveedor",
+        "historial_demanda",
+        "parametros",
+        "periodos_por_año",
+        "dias_por_periodo",
+        "margen_seguridad_pct",
+    ]
+    assert (
+        inspect.signature(calcular_recomendaciones).parameters["parametros"].default
+        is None
+    )
+
+
+def test_parametros_custom_cambian_los_cortes_de_abc():
+    entrada = _escenario_tres_productos()
+
+    por_defecto = _calcular(entrada).set_index("producto_id")
+    con_corte_en_50 = _calcular(
+        entrada, parametros=_parametros_custom(abc_clase_a_pct=50.0)
+    ).set_index("producto_id")
+
+    # Valor económico del escenario: P002 = 30000 (60.6 % del total), P001 =
+    # 18000 (96.97 % acumulado) y P003 = 1500 (100 % acumulado). Con el corte por
+    # defecto (80 %) P002 es 'A'; con 50 % su acumulado lo deja en la banda B.
+    assert por_defecto.loc["P002", "clase_abc"] == "A"
+    assert con_corte_en_50.loc["P002", "clase_abc"] == "B"
+    # El corte de la clase B no se movió: P001 y P003 siguen en 'C'.
+    assert por_defecto.loc["P001", "clase_abc"] == "C"
+    assert con_corte_en_50.loc["P001", "clase_abc"] == "C"
+    assert con_corte_en_50.loc["P003", "clase_abc"] == "C"
+
+
+def test_parametros_custom_del_umbral_de_ahorro_marcan_mas_productos():
+    entrada = _escenario_tres_productos()
+
+    por_defecto = _calcular(entrada)
+    con_umbral_cero = _calcular(
+        entrada, parametros=_parametros_custom(ahorro_neto_min_pct=0.0)
+    )
+
+    # Por defecto solo P001 (descuento del 5 %) supera el 3 % del pedido.
+    assert (por_defecto["estado_ahorro"] == "Ahorro detectado").sum() == 1
+    # Con el umbral en 0 los tres quedan "Ahorro detectado": los productos sin
+    # descuento tienen ahorro_neto = 0, que alcanza el umbral.
+    assert (con_umbral_cero["estado_ahorro"] == "Ahorro detectado").all()
+    # Lo que cambió es la decisión, no el cálculo del ahorro.
+    pd.testing.assert_series_equal(
+        con_umbral_cero["ahorro_neto_estimado"],
+        por_defecto["ahorro_neto_estimado"],
+    )
+
+
+def test_parametros_none_usa_los_defaults_del_sistema():
+    entrada = _escenario_tres_productos()
+
+    sin_pasar = _calcular(entrada)
+    con_none = _calcular(entrada, parametros=None)
+    con_los_defaults = _calcular(entrada, parametros=dict(PARAMETROS_DEFAULT))
+
+    # None y el dict de defaults dan exactamente el mismo resultado que omitir el
+    # parámetro: los tests anteriores no cambiaron de comportamiento.
+    pd.testing.assert_frame_equal(con_none, sin_pasar)
+    pd.testing.assert_frame_equal(con_los_defaults, sin_pasar)
+
+
+def test_la_ventana_de_demanda_se_convierte_a_int_aunque_llegue_como_float():
+    # La tabla de configuración devuelve todos los valores como float (6.0), así
+    # que sin el cast a int() estimar_demanda lanzaría ValueError por 'ventana'.
+    entrada = _dataframes(
+        productos=[_producto("P001", stock_actual=0.0)],
+        proveedores=[_proveedor("PR1")],
+        relaciones=[_relacion("P001", "PR1")],
+        historial=_historial("P001", [100.0, 200.0, 300.0, 400.0, 500.0, 600.0]),
+    )
+
+    con_ventana_dos = _calcular(
+        entrada, parametros=_parametros_custom(demanda_ventana_default=2.0)
+    )
+    con_ventana_seis = _calcular(
+        entrada, parametros=_parametros_custom(demanda_ventana_default=6.0)
+    )
+
+    # Con ventana 2 se promedian los dos últimos periodos (500 y 600) y con
+    # ventana 6, los seis: el parámetro entra en el promedio como int.
+    assert con_ventana_dos.loc[0, "demanda_estimada"] == pytest.approx(550.0)
+    assert con_ventana_seis.loc[0, "demanda_estimada"] == pytest.approx(350.0)
+
+
+def test_parametros_custom_del_cv_cambian_la_clase_xyz():
+    entrada = _escenario_tres_productos()
+
+    por_defecto = _calcular(entrada).set_index("producto_id")
+    con_cortes_altos = _calcular(
+        entrada,
+        parametros=_parametros_custom(cv_confianza_alta=0.0, cv_confianza_media=2.0),
+    ).set_index("producto_id")
+
+    # P002 tiene CV ~ 1.095: es 'Z' con el corte Y por defecto (1.0) y pasa a 'Y'
+    # cuando el corte sube a 2.0. P001 (CV 0) sigue siendo 'X'.
+    assert por_defecto.loc["P002", "clase_xyz"] == "Z"
+    assert con_cortes_altos.loc["P002", "clase_xyz"] == "Y"
+    assert con_cortes_altos.loc["P001", "clase_xyz"] == "X"
+
+
+def test_los_cortes_de_score_llegan_al_modulo_de_proveedores(monkeypatch):
+    """Los cortes de score se propagan aunque no cambien la recomendación.
+
+    El 'estado' del proveedor es lo único que depende de los cortes y no viaja a
+    la salida, así que la propagación se comprueba con un espía sobre la función
+    del motor que el orquestador tiene importada.
+    """
+    umbrales_usados: list[tuple[float, float]] = []
+
+    def espia(datos, *, umbral_confiable, umbral_riesgoso):
+        umbrales_usados.append((umbral_confiable, umbral_riesgoso))
+        return calcular_score_proveedor(
+            datos,
+            umbral_confiable=umbral_confiable,
+            umbral_riesgoso=umbral_riesgoso,
+        )
+
+    monkeypatch.setattr("src.recomendador.calcular_score_proveedor", espia)
+
+    resultado = _calcular(
+        _escenario_tres_productos(),
+        parametros=_parametros_custom(
+            score_proveedor_confiable=70.0, score_proveedor_riesgoso=50.0
+        ),
+    )
+
+    assert umbrales_usados == [(70.0, 50.0)]
+    # El score no depende de los cortes: la selección de proveedor no cambia.
+    assert resultado.set_index("producto_id").loc["P001", "proveedor_id"] == "PR1"
+
+
+# --------------------------------------- generar_recomendaciones (cliente falso)
+
+
+class _RespuestaFalsa:
+    """Respuesta mínima de PostgREST: solo el atributo ``data``."""
+
+    def __init__(self, data: list[dict]) -> None:
+        self.data = data
+
+
+class _TablaFalsa:
+    """Constructor de consultas mínimo: ``select(...).execute()``."""
+
+    def __init__(self, cliente: "_ClienteSupabaseFalso", nombre: str) -> None:
+        self._cliente = cliente
+        self._nombre = nombre
+
+    def select(self, columnas: str) -> "_TablaFalsa":
+        self._cliente.consultas.append((self._nombre, columnas))
+        return self
+
+    def execute(self) -> _RespuestaFalsa:
+        return _RespuestaFalsa(self._cliente.datos[self._nombre])
+
+
+class _ClienteSupabaseFalso:
+    """Cliente de Supabase en memoria: sirve cada tabla por nombre.
+
+    Registra en ``consultas`` cada ``select`` que recibe, para poder afirmar qué
+    tablas se leyeron y en qué orden.
+    """
+
+    def __init__(self, datos: dict[str, list[dict]]) -> None:
+        self.datos = datos
+        self.consultas: list[tuple[str, str]] = []
+
+    def table(self, nombre: str) -> _TablaFalsa:
+        return _TablaFalsa(self, nombre)
+
+
+def _tablas_supabase(
+    parametros: dict[str, float] | None = None,
+) -> dict[str, list[dict]]:
+    """Las cinco tablas tal como las devuelve PostgREST (``id`` y ``nombre``).
+
+    Las cuatro tablas de negocio se derivan del escenario de tres productos, con
+    los nombres de columna de la base (``id``, ``nombre``); la de configuración se
+    arma en el formato vertical de ``parametros_configuracion``
+    (``nombre_parametro | valor | descripcion``) con ``parametros`` o, si es None,
+    con los defaults del sistema.
+    """
+    productos, proveedores, relaciones, historial = _escenario_tres_productos()
+    valores: dict[str, float] = PARAMETROS_DEFAULT if parametros is None else parametros
+
+    return {
+        "productos": [
+            {
+                "id": fila["producto_id"],
+                "nombre": fila["nombre"],
+                "categoria": fila["categoria"],
+                "costo_unitario": fila["costo_unitario"],
+                "stock_actual": fila["stock_actual"],
+                "costo_ordenar": fila["costo_ordenar"],
+                "costo_mantener_pct_anual": fila["costo_mantener_pct_anual"],
+            }
+            for _, fila in productos.iterrows()
+        ],
+        "proveedores": [
+            {
+                "id": fila["proveedor_id"],
+                "nombre": fila["proveedor_nombre"],
+                "cumplimiento_entrega_pct": fila["cumplimiento_entrega_pct"],
+                "tasa_defectos_pct": fila["tasa_defectos_pct"],
+            }
+            for _, fila in proveedores.iterrows()
+        ],
+        "producto_proveedor": relaciones.to_dict(orient="records"),
+        "historial_demanda": historial.to_dict(orient="records"),
+        "parametros_configuracion": [
+            {"nombre_parametro": nombre, "valor": valor, "descripcion": None}
+            for nombre, valor in valores.items()
+        ],
+    }
+
+
+def test_generar_recomendaciones_carga_los_parametros_de_supabase_y_los_usa():
+    # La tabla de configuración se sirve con un corte ABC distinto del default:
+    # así se comprueba de una vez que cargar_parametros se llama y que su
+    # resultado llega al motor.
+    cliente = _ClienteSupabaseFalso(
+        _tablas_supabase(_parametros_custom(abc_clase_a_pct=50.0))
+    )
+
+    resultado = generar_recomendaciones(cliente).set_index("producto_id")
+
+    # Las cinco tablas, cada una completa y una sola vez, en este orden.
+    assert cliente.consultas == [
+        ("productos", "*"),
+        ("proveedores", "*"),
+        ("producto_proveedor", "*"),
+        ("historial_demanda", "*"),
+        ("parametros_configuracion", "*"),
+    ]
+    # El renombre de columnas de la base sigue funcionando...
+    assert resultado.loc["P001", "proveedor_nombre"] == "Proveedor PR1"
+    # ...y el corte leído de Supabase (50 %) es el que clasifica: P002 baja de
+    # 'A' (con los defaults) a 'B', y P001 y P003 quedan en 'C'.
+    assert resultado.loc["P002", "clase_abc"] == "B"
+    assert resultado.loc["P001", "clase_abc"] == "C"
+    assert resultado.loc["P003", "clase_abc"] == "C"
+
+
+def test_generar_recomendaciones_propaga_el_value_error_de_los_parametros():
+    # Tabla de configuración vacía: cargar_parametros no puede armar el dict y
+    # falla; la excepción se propaga igual que la de las lecturas de datos.
+    tablas = _tablas_supabase()
+    tablas["parametros_configuracion"] = []
+    cliente = _ClienteSupabaseFalso(tablas)
+
+    with pytest.raises(ValueError, match="faltan 10 de los 10"):
+        generar_recomendaciones(cliente)
+
+
+def test_generar_recomendaciones_con_los_defaults_en_la_tabla_no_cambia_nada():
+    """Con la configuración servida con los defaults, el resultado es el mismo que
+    el de la función pura sin parámetros: la lectura no altera el cálculo."""
+    cliente = _ClienteSupabaseFalso(_tablas_supabase())
+
+    resultado = generar_recomendaciones(cliente)
+    esperado = _calcular(_escenario_tres_productos())
+
+    pd.testing.assert_frame_equal(resultado, esperado)
 

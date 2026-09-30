@@ -5,10 +5,12 @@ opcional, escribe en Supabase. Expone tres funciones con responsabilidades
 separadas:
 
 * :func:`calcular_recomendaciones` -- función **pura**: recibe cuatro DataFrames
+  (más un dict opcional de parámetros de configuración)
   y devuelve un DataFrame. Orquesta los seis módulos del motor, no accede a red,
   base de datos ni archivos, no imprime ni registra nada y no modifica las
   entradas. Es la parte testeable.
-* :func:`generar_recomendaciones` -- lee las cuatro tablas de Supabase,
+* :func:`generar_recomendaciones` -- lee las cinco tablas de Supabase (las cuatro
+  de datos y ``parametros_configuracion``),
   normaliza los nombres de columna y delega el cálculo en
   :func:`calcular_recomendaciones`. Solo hace E/S: no contiene lógica de
   negocio.
@@ -25,6 +27,19 @@ identifican sus filas con ``id`` y los proveedores guardan su descripción en
 :func:`generar_recomendaciones`, justo después de leer Supabase, de modo que
 :func:`calcular_recomendaciones` recibe siempre los nombres que el motor espera
 (y sus tests los construyen directamente con esos nombres).
+
+Parámetros de configuración
+---------------------------
+Los umbrales del motor (cortes ABC, ventana de demanda, CV de confianza, cortes
+de score de proveedor y umbral de ahorro) llegan en el parámetro ``parametros``
+de :func:`calcular_recomendaciones`, que espera las claves de
+:data:`src.config.PARAMETROS_DEFAULT`; ``None`` significa "usar los defaults del
+sistema". Esta función **no** los lee de Supabase: los carga
+:func:`generar_recomendaciones` con :func:`src.config.cargar_parametros` y los
+pasa ya resueltos, de modo que la parte calculable sigue siendo pura y testeable
+sin red. Los tres parámetros de :mod:`src.motor.eoq_rop` (``periodos_por_año``,
+``dias_por_periodo`` y ``margen_seguridad_pct``) no están en la tabla de
+configuración y por eso siguen siendo argumentos propios de este módulo.
 
 Algoritmo de :func:`calcular_recomendaciones`
 --------------------------------------------
@@ -106,6 +121,7 @@ ejemplo) es un problema del llamador, no algo que este módulo deba esconder.
 import numpy as np
 import pandas as pd
 
+from src.config import PARAMETROS_DEFAULT, cargar_parametros
 from src.motor.abc import clasificar_abc
 from src.motor.ahorro import calcular_ahorro
 from src.motor.demanda import estimar_demanda
@@ -260,6 +276,7 @@ def calcular_recomendaciones(
     proveedores: pd.DataFrame,
     producto_proveedor: pd.DataFrame,
     historial_demanda: pd.DataFrame,
+    parametros: dict[str, float] | None = None,
     periodos_por_año: int = 12,
     dias_por_periodo: int = 30,
     margen_seguridad_pct: float = 0.20,
@@ -283,6 +300,22 @@ def calcular_recomendaciones(
         historial_demanda: historial en formato largo, con las columnas de
             :data:`COLUMNAS_HISTORIAL` (``producto_id``, ``periodo``,
             ``cantidad_demandada``).
+        parametros: dict[str, float] | None = None. Diccionario con los
+            parámetros de configuración. Si es None, se usa
+            :data:`src.config.PARAMETROS_DEFAULT`. Las claves esperadas son las
+            de :data:`src.config.PARAMETROS_DEFAULT`: ``abc_clase_a_pct`` y
+            ``abc_clase_b_pct`` (cortes de
+            :func:`src.motor.abc.clasificar_abc`), ``demanda_ventana_default``
+            (ventana de :func:`src.motor.demanda.estimar_demanda`, convertida a
+            ``int`` porque el dict trae floats), ``cv_confianza_alta`` y
+            ``cv_confianza_media`` (cortes de
+            :func:`src.motor.xyz.clasificar_xyz`), ``score_proveedor_confiable``
+            y ``score_proveedor_riesgoso`` (cortes de
+            :func:`src.motor.proveedor.calcular_score_proveedor`) y
+            ``ahorro_neto_min_pct`` (umbral de
+            :func:`src.motor.ahorro.calcular_ahorro`). Las claves
+            ``eoq_min_pct`` y ``eoq_max_pct`` también vienen en el dict, pero
+            las consume :mod:`src.evaluador`, no este módulo.
         periodos_por_año: periodos que tiene un año, para anualizar la demanda y
             prorratear el costo de mantener el exceso de inventario. Default 12
             (periodos mensuales). Se pasa el mismo valor a
@@ -323,7 +356,9 @@ def calcular_recomendaciones(
 
     Notas:
         - La función es pura: no accede a red, DB ni archivos, no imprime ni
-          registra nada y no modifica los DataFrames de entrada.
+          registra nada y no modifica los DataFrames de entrada ni el dict
+          ``parametros``. La lectura de los parámetros desde Supabase es
+          responsabilidad de :func:`generar_recomendaciones`.
         - La salida es un DataFrame nuevo, con RangeIndex desde 0.
         - Toda combinación de resultados se hace con ``how="inner"`` por
           ``producto_id``: la salida solo contiene productos que sobrevivieron a
@@ -332,12 +367,23 @@ def calcular_recomendaciones(
           productos sin CV calculable se excluyen (ver Reglas), así que no hace
           falta que :data:`COLUMNAS_NO_NULAS` las incluya para cumplir el
           ``not null`` de la tabla ``recomendaciones``.
+        - ``parametros`` solo aporta los ocho umbrales del motor listados en
+          Args; ``periodos_por_año``, ``dias_por_periodo`` y
+          ``margen_seguridad_pct`` siguen siendo argumentos propios porque no
+          están en ``parametros_configuracion`` (``eoq_rop.py`` no se configura
+          desde la tabla).
         - Los ``ValueError`` del motor se propagan sin capturarlos. El llamador
           debe asegurar las precondiciones del motor, en particular
           ``costo_unitario > 0`` y ``costo_mantener_pct_anual > 0`` para todo
           producto (H > 0 en :mod:`src.motor.eoq_rop`).
 
     Raises:
+        KeyError: si ``parametros`` no trae alguna de las claves de umbral que
+            este módulo indexa. No se verifica aquí con
+            :func:`src.config.verificar_parametros`: cuando el dict viene de
+            Supabase, :func:`src.config.cargar_parametros` ya lo verifica, y un
+            dict incompleto pasado a mano debe fallar, no completarse en
+            silencio con los defaults.
         ValueError: si a alguno de los cuatro DataFrames le falta una columna
             requerida.
         ValueError: si tras los merges alguna columna de
@@ -347,6 +393,13 @@ def calcular_recomendaciones(
             (parámetros escalares fuera de rango, H == 0, etc.), propagado tal
             cual.
     """
+
+    # Los parámetros de configuración se resuelven antes de llamar a cualquier
+    # módulo del motor: None significa "usar los defaults del sistema". La
+    # función no los lee de Supabase (sigue siendo pura); los carga
+    # generar_recomendaciones y llegan ya resueltos o como None.
+    if parametros is None:
+        parametros = PARAMETROS_DEFAULT
 
     # Validación mínima de columnas: es lo primero, para no llamar al motor con
     # datos incompletos y para que el error señale el DataFrame culpable.
@@ -375,7 +428,11 @@ def calcular_recomendaciones(
     historial_filtrado: pd.DataFrame = _filtrar_por_producto(
         historial_demanda, producto_ids_validos
     )
-    xyz: pd.DataFrame = clasificar_xyz(historial_filtrado).rename(
+    xyz: pd.DataFrame = clasificar_xyz(
+        historial_filtrado,
+        umbral_x=parametros["cv_confianza_alta"],
+        umbral_y=parametros["cv_confianza_media"],
+    ).rename(
         columns={"cv": "cv_demanda"}
     )
     con_cv: set = set(xyz.loc[xyz["cv_demanda"].notna(), "producto_id"])
@@ -400,7 +457,7 @@ def calcular_recomendaciones(
 
     # --- Paso 3: proveedor elegido por producto ----------------------------
     elegido: pd.DataFrame = _elegir_proveedor(
-        producto_proveedor_filtrado, proveedores
+        producto_proveedor_filtrado, proveedores, parametros=parametros
     )
 
     # --- Paso 4: métricas del motor ----------------------------------------
@@ -415,12 +472,16 @@ def calcular_recomendaciones(
     abc: pd.DataFrame = clasificar_abc(
         productos_filtrado[["producto_id", "costo_unitario"]].merge(
             demanda_total, on="producto_id", how="inner"
-        )
+        ),
+        umbral_clase_a=parametros["abc_clase_a_pct"],
+        umbral_clase_b=parametros["abc_clase_b_pct"],
     )[["producto_id", "clase_abc"]]
 
     # La demanda estimada se alimenta del historial filtrado; la clasificación XYZ
     # se calculó en el paso 2.
-    demanda: pd.DataFrame = estimar_demanda(historial_filtrado)
+    demanda: pd.DataFrame = estimar_demanda(
+        historial_filtrado, ventana=int(parametros["demanda_ventana_default"])
+    )
 
     # EOQ / stock de seguridad / punto de reorden: costo del producto + lead time
     # del proveedor elegido + demanda estimada.
@@ -466,7 +527,9 @@ def calcular_recomendaciones(
         )
     )
     ahorro: pd.DataFrame = calcular_ahorro(
-        datos_ahorro, periodos_por_año=periodos_por_año
+        datos_ahorro,
+        umbral_ahorro_pct=parametros["ahorro_neto_min_pct"],
+        periodos_por_año=periodos_por_año,
     )
 
     # --- Paso 5: combinación (una fila por producto) ------------------------
@@ -565,9 +628,13 @@ def generar_recomendaciones(supabase_client) -> pd.DataFrame:
       ``producto_id`` y ``proveedor_id``, y el renombre de ``proveedores`` no los
       afecta).
 
-    Después delega todo el cálculo en :func:`calcular_recomendaciones`, con sus
-    parámetros por defecto (12 periodos por año, 30 días por periodo y 20 % de
-    margen de seguridad).
+    Después carga los parámetros de configuración con
+    :func:`src.config.cargar_parametros` (tabla ``parametros_configuracion``) y
+    delega todo el cálculo en :func:`calcular_recomendaciones`, pasándoselos ya
+    resueltos para que la función pura no toque la base de datos. Esta función
+    **no** permite ajustar los tres parámetros de :mod:`src.motor.eoq_rop`
+    (``periodos_por_año``, ``dias_por_periodo`` y ``margen_seguridad_pct``):
+    siguen tomando sus defaults.
 
     Args:
         supabase_client: cliente de Supabase ya configurado. Alcanza con la
@@ -581,16 +648,28 @@ def generar_recomendaciones(supabase_client) -> pd.DataFrame:
         - El orden de las filas que devuelve la API no está garantizado, así que
           el desempate de proveedores con el mismo score y el mismo precio puede
           variar entre ejecuciones (ver :func:`calcular_recomendaciones`).
-        - Esta función no permite ajustar los parámetros del cálculo
-          (``periodos_por_año``, ``dias_por_periodo``, ``margen_seguridad_pct``):
-          un llamador que los necesite debe leer los datos por su cuenta y llamar
-          a :func:`calcular_recomendaciones` directamente.
+        - Los umbrales del motor no se eligen aquí: salen de la tabla
+          ``parametros_configuracion`` y los carga
+          :func:`src.config.cargar_parametros` (ver
+          :func:`calcular_recomendaciones`). Si a esa tabla le falta un
+          parámetro, :func:`src.config.cargar_parametros` lanza ``ValueError``.
+        - Esta función no permite ajustar los tres parámetros de
+          :mod:`src.motor.eoq_rop` (``periodos_por_año``, ``dias_por_periodo``,
+          ``margen_seguridad_pct``): un llamador que los necesite debe leer los
+          datos y los parámetros por su cuenta y llamar a
+          :func:`calcular_recomendaciones` directamente.
 
     Raises:
-        ValueError: si alguna de las cuatro tablas viene vacía (sin filas no hay
-            columnas que validar y no se puede calcular nada).
+        ValueError: si alguna de las cuatro tablas de datos viene vacía (sin
+            filas no hay columnas que validar y no se puede calcular nada).
+        ValueError: si a la tabla ``parametros_configuracion`` le falta algún
+            parámetro esperado (incluida la tabla vacía); lo lanza
+            :func:`src.config.verificar_parametros` a través de
+            :func:`src.config.cargar_parametros`.
         Exception: cualquier error de red o de la API de Supabase (credenciales
-            inválidas, tabla inexistente, timeout) se propaga tal cual.
+            inválidas, tabla inexistente, timeout) se propaga tal cual. Un fallo
+            de Supabase al leer los parámetros se propaga igual que el de las
+            cuatro tablas de datos.
     """
     productos: pd.DataFrame = _leer_tabla(supabase_client, "productos").rename(
         columns={"id": "producto_id"}
@@ -603,8 +682,19 @@ def generar_recomendaciones(supabase_client) -> pd.DataFrame:
     )
     historial_demanda: pd.DataFrame = _leer_tabla(supabase_client, "historial_demanda")
 
+    # Los umbrales del motor salen de la tabla de configuración; si a Supabase le
+    # falta algún parámetro, cargar_parametros lanza ValueError y la excepción se
+    # propaga tal cual (mismo contrato que las lecturas de arriba). Se leen
+    # después de los datos para no hacer una petición extra cuando las tablas de
+    # datos están vacías o fallan.
+    parametros: dict[str, float] = cargar_parametros(supabase_client)
+
     return calcular_recomendaciones(
-        productos, proveedores, producto_proveedor, historial_demanda
+        productos,
+        proveedores,
+        producto_proveedor,
+        historial_demanda,
+        parametros=parametros,
     )
 
 
@@ -748,11 +838,19 @@ def _filtrar_por_producto(datos: pd.DataFrame, producto_ids: list) -> pd.DataFra
     return datos[datos["producto_id"].isin(producto_ids)]
 
 
-def _proveedores_con_score(proveedores: pd.DataFrame) -> pd.DataFrame:
+def _proveedores_con_score(
+    proveedores: pd.DataFrame,
+    parametros: dict[str, float] | None = None,
+) -> pd.DataFrame:
     """Cataloga a los proveedores con su score (paso 2).
 
     Args:
         proveedores: catálogo de proveedores, ya validado por columnas.
+        parametros: parámetros de configuración ya resueltos por
+            :func:`calcular_recomendaciones` (None = usar
+            :data:`src.config.PARAMETROS_DEFAULT`). De aquí salen los dos cortes
+            del score que recibe
+            :func:`src.motor.proveedor.calcular_score_proveedor`.
 
     Returns:
         DataFrame con ``proveedor_id``, ``proveedor_nombre``,
@@ -762,9 +860,24 @@ def _proveedores_con_score(proveedores: pd.DataFrame) -> pd.DataFrame:
         posterior sea 1:1: el schema declara ``id`` como clave primaria, así que
         la deduplicación no debería activarse nunca, pero si llegara un catálogo
         con IDs repetidos el merge no multiplicaría candidatos en silencio.
+
+    Notas:
+        El ``estado`` del proveedor (Confiable / Aceptable con reservas /
+        Riesgoso) no viaja a la salida: :data:`COLUMNAS_PROVEEDOR_ELEGIDO` no lo
+        incluye. Los cortes se propagan igualmente porque son parte de la
+        parametrización del motor y el llamador espera que el módulo se evalúe
+        con los valores de ``parametros_configuracion``; lo que decide al
+        proveedor elegido es el ``score``, que no depende de ellos.
     """
+    umbrales: dict[str, float] = (
+        PARAMETROS_DEFAULT if parametros is None else parametros
+    )
     puntajes: pd.DataFrame = (
-        calcular_score_proveedor(proveedores)
+        calcular_score_proveedor(
+            proveedores,
+            umbral_confiable=umbrales["score_proveedor_confiable"],
+            umbral_riesgoso=umbrales["score_proveedor_riesgoso"],
+        )
         .rename(columns={"score": "score_proveedor"})[
             ["proveedor_id", "score_proveedor"]
         ]
@@ -785,12 +898,17 @@ def _proveedores_con_score(proveedores: pd.DataFrame) -> pd.DataFrame:
 def _elegir_proveedor(
     producto_proveedor: pd.DataFrame,
     proveedores: pd.DataFrame,
+    parametros: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """Elige un proveedor por producto: mayor score y, en empate, menor precio.
 
     Args:
         producto_proveedor: relación producto-proveedor de los productos válidos.
         proveedores: catálogo completo de proveedores.
+        parametros: parámetros de configuración ya resueltos (None = usar
+            :data:`src.config.PARAMETROS_DEFAULT`), reenviados tal cual a
+            :func:`_proveedores_con_score` para que los cortes del score salgan
+            de la configuración.
 
     Returns:
         DataFrame con una fila por producto y las columnas de
@@ -800,7 +918,7 @@ def _elegir_proveedor(
         merges ``inner`` del paso 4 lo dejan fuera de la salida.
     """
     candidatos: pd.DataFrame = producto_proveedor.merge(
-        _proveedores_con_score(proveedores), on="proveedor_id", how="inner"
+        _proveedores_con_score(proveedores, parametros), on="proveedor_id", how="inner"
     )
 
     # Orden por producto y, dentro de cada producto, score descendente y precio
