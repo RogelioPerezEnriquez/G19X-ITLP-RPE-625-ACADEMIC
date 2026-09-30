@@ -42,8 +42,9 @@ proveedor, con ``id`` como clave primaria).
 Los cortes sobre el score son parámetros de :func:`calcular_score_proveedor` y
 sus valores por defecto vienen de :data:`src.config.PARAMETROS_DEFAULT`
 (``score_proveedor_confiable`` = 80.0 y ``score_proveedor_riesgoso`` = 60.0),
-que es la fuente única de verdad: cuando el MVP incorpore la tabla de
-configuración, de ahí saldrán sus valores.
+que es la fuente única de verdad: refleja las filas correspondientes de la tabla
+``parametros_configuracion`` y ya llegan desde ahí en el pipeline
+(``src.recomendador`` los lee con :func:`src.config.cargar_parametros`).
 
 Los pesos de la fórmula (:data:`PESO_CUMPLIMIENTO`, :data:`PESO_CALIDAD`) y las
 etiquetas de estado (:data:`ESTADO_CONFIABLE`, :data:`ESTADO_ACEPTABLE`,

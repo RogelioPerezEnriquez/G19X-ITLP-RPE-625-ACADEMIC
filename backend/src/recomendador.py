@@ -83,10 +83,12 @@ En este orden: ``producto_id``, ``proveedor_id``, ``proveedor_nombre``,
 ``costo_extra_mantener``, ``costo_total_pedido`` y ``urgencia``.
 
 ``cantidad_umbral_descuento`` y ``descuento_pct`` (los dos del proveedor
-elegido) se añaden al final porque el requisito 11 y los tests exigen poder
-observarlos en la salida: son las dos únicas columnas que **pueden** contener
-valores nulos, y un nulo significa "el producto no tiene descuento por volumen"
-(ver :mod:`src.motor.ahorro`). No forman parte de la lista ordenada del paso 4.
+elegido) se añaden al final para que los insumos del criterio 6 de la rúbrica
+sean visibles en la salida y para que esta quede trazable hasta los datos de
+entrada (RF-05 y RF-08 de ``MVP.md`` §6): son las dos únicas columnas que
+**pueden** contener valores nulos, y un nulo significa "el producto no tiene
+descuento por volumen" (ver :mod:`src.motor.ahorro`). No forman parte de la
+lista de la sección «Columnas de la salida».
 
 Casos borde
 -----------
@@ -125,7 +127,12 @@ from src.config import PARAMETROS_DEFAULT, cargar_parametros
 from src.motor.abc import clasificar_abc
 from src.motor.ahorro import calcular_ahorro
 from src.motor.demanda import estimar_demanda
-from src.motor.eoq_rop import calcular_eoq_rop
+from src.motor.eoq_rop import (
+    DIAS_POR_PERIODO_DEFAULT,
+    MARGEN_SEGURIDAD_PCT_DEFAULT,
+    PERIODOS_POR_AÑO_DEFAULT,
+    calcular_eoq_rop,
+)
 from src.motor.proveedor import calcular_score_proveedor
 from src.motor.xyz import MIN_PERIODOS, clasificar_xyz
 
@@ -277,9 +284,9 @@ def calcular_recomendaciones(
     producto_proveedor: pd.DataFrame,
     historial_demanda: pd.DataFrame,
     parametros: dict[str, float] | None = None,
-    periodos_por_año: int = 12,
-    dias_por_periodo: int = 30,
-    margen_seguridad_pct: float = 0.20,
+    periodos_por_año: int = PERIODOS_POR_AÑO_DEFAULT,
+    dias_por_periodo: int = DIAS_POR_PERIODO_DEFAULT,
+    margen_seguridad_pct: float = MARGEN_SEGURIDAD_PCT_DEFAULT,
 ) -> pd.DataFrame:
     """
     Calcula una recomendación de compra por producto válido, con su proveedor.
@@ -317,16 +324,19 @@ def calcular_recomendaciones(
             ``eoq_min_pct`` y ``eoq_max_pct`` también vienen en el dict, pero
             las consume :mod:`src.evaluador`, no este módulo.
         periodos_por_año: periodos que tiene un año, para anualizar la demanda y
-            prorratear el costo de mantener el exceso de inventario. Default 12
-            (periodos mensuales). Se pasa el mismo valor a
+            prorratear el costo de mantener el exceso de inventario. Default
+            :data:`src.motor.eoq_rop.PERIODOS_POR_AÑO_DEFAULT` (12, periodos
+            mensuales). Se pasa el mismo valor a
             :func:`src.motor.eoq_rop.calcular_eoq_rop` y a
             :func:`src.motor.ahorro.calcular_ahorro` para que los dos módulos
             midan el tiempo en las mismas unidades (deuda técnica declarada en
             ``PENDIENTES.md``).
         dias_por_periodo: días que tiene un periodo, para el stock de seguridad y
-            el punto de reorden. Default 30.
+            el punto de reorden. Default
+            :data:`src.motor.eoq_rop.DIAS_POR_PERIODO_DEFAULT` (30).
         margen_seguridad_pct: margen sobre el consumo esperado durante el lead
-            time. Default 0.20 (20 %).
+            time. Default
+            :data:`src.motor.eoq_rop.MARGEN_SEGURIDAD_PCT_DEFAULT` (0.20, 20 %).
 
     Returns:
         DataFrame con una fila por producto válido y las columnas de
@@ -369,7 +379,11 @@ def calcular_recomendaciones(
           ``not null`` de la tabla ``recomendaciones``.
         - ``parametros`` solo aporta los ocho umbrales del motor listados en
           Args; ``periodos_por_año``, ``dias_por_periodo`` y
-          ``margen_seguridad_pct`` siguen siendo argumentos propios porque no
+          ``margen_seguridad_pct`` siguen siendo argumentos propios, con los
+          defaults de :mod:`src.motor.eoq_rop`
+          (:data:`~src.motor.eoq_rop.PERIODOS_POR_AÑO_DEFAULT`,
+          :data:`~src.motor.eoq_rop.DIAS_POR_PERIODO_DEFAULT` y
+          :data:`~src.motor.eoq_rop.MARGEN_SEGURIDAD_PCT_DEFAULT`), porque no
           están en ``parametros_configuracion`` (``eoq_rop.py`` no se configura
           desde la tabla).
         - Los ``ValueError`` del motor se propagan sin capturarlos. El llamador
@@ -842,7 +856,7 @@ def _proveedores_con_score(
     proveedores: pd.DataFrame,
     parametros: dict[str, float] | None = None,
 ) -> pd.DataFrame:
-    """Cataloga a los proveedores con su score (paso 2).
+    """Cataloga a los proveedores con su score (paso 3).
 
     Args:
         proveedores: catálogo de proveedores, ya validado por columnas.

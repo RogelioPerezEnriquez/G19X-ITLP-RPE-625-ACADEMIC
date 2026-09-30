@@ -39,10 +39,11 @@ El módulo no agrupa: cada fila de entrada produce una fila de salida, así que 
 producto). Tampoco anualiza ni convierte unidades por su cuenta: para la demanda
 anualizada usa el factor ``periodos_por_año`` que recibe del llamador.
 
-Los parámetros configurables viven en constantes de módulo
+Los tres parámetros de calendario y margen viven en constantes de módulo
 (:data:`PERIODOS_POR_AÑO_DEFAULT`, :data:`DIAS_POR_PERIODO_DEFAULT`,
-:data:`MARGEN_SEGURIDAD_PCT_DEFAULT`) como fuente única de verdad: cuando el MVP
-incorpore la tabla de configuración, esos serán sus valores por defecto.
+:data:`MARGEN_SEGURIDAD_PCT_DEFAULT`) como fuente única de verdad: no están en
+la tabla ``parametros_configuracion``, así que no son parámetros configurables
+(mismo criterio que :mod:`src.motor.ahorro`).
 """
 
 import numpy as np
@@ -60,17 +61,17 @@ COLUMNAS_REQUERIDAS: tuple[str, ...] = (
     "lead_time_dias",
 )
 
-# Periodos que tiene un año. Fuente única de verdad: cuando el MVP incorpore la
-# tabla de configuración, este será su valor por defecto.
+# Periodos que tiene un año. Fuente única de verdad del valor: no está en la
+# tabla de configuración, así que no es un parámetro configurable.
 PERIODOS_POR_AÑO_DEFAULT: int = 12
 
-# Días que tiene un periodo. Fuente única de verdad: cuando el MVP incorpore la
-# tabla de configuración, este será su valor por defecto.
+# Días que tiene un periodo. Fuente única de verdad del valor: no está en la
+# tabla de configuración, así que no es un parámetro configurable.
 DIAS_POR_PERIODO_DEFAULT: int = 30
 
 # Margen sobre el consumo esperado durante el lead time que se reserva como
-# stock de seguridad. Fuente única de verdad: cuando el MVP incorpore la tabla
-# de configuración, este será su valor por defecto.
+# stock de seguridad. Fuente única de verdad del valor: no está en la tabla de
+# configuración, así que no es un parámetro configurable.
 MARGEN_SEGURIDAD_PCT_DEFAULT: float = 0.20
 
 
@@ -96,7 +97,9 @@ def calcular_eoq_rop(
         dias_por_periodo: días que tiene un periodo. Default 30.
             Debe ser un entero positivo.
         margen_seguridad_pct: factor de margen para el stock de seguridad.
-            Default 0.20 (20%). Debe ser un float >= 0.
+            Default 0.20 (20%). Debe ser un número (int o float) >= 0. NaN e
+            inf pasan la validación y dejan ``stock_seguridad`` y
+            ``punto_reorden`` en NaN/inf (ver Notas).
 
     Returns:
         DataFrame con una fila por producto, con columnas:
@@ -123,6 +126,12 @@ def calcular_eoq_rop(
         - La salida es un DataFrame nuevo, con RangeIndex desde 0.
         - Las unidades de entrada y salida son consistentes con la entrada
           (el llamador se encarga de unificar unidades si es necesario).
+        - ``margen_seguridad_pct`` no rechaza ``NaN`` ni ``inf``: son floats y
+          toda comparación con ellos es False, así que pasan la validación y
+          dejan ``stock_seguridad`` y ``punto_reorden`` en NaN/inf. Es una
+          diferencia conocida frente a
+          :func:`src.motor.ahorro._verificar_umbral_ahorro`, que sí rechaza el
+          NaN del umbral de ahorro.
         - Orden de ejecución: primero se validan los parámetros escalares,
           luego las columnas requeridas, luego el caso vacío, y solo si hay
           filas se valida H == 0 y se calculan los valores.
@@ -131,11 +140,13 @@ def calcular_eoq_rop(
         ValueError: si al DataFrame le falta alguna columna requerida, tenga
             o no filas.
         ValueError: si `periodos_por_año`, `dias_por_periodo` o
-            `margen_seguridad_pct` no son válidos.
+            `margen_seguridad_pct` no son válidos. De `margen_seguridad_pct`
+            solo se rechazan los valores no numéricos y los negativos: ``NaN``
+            e ``inf`` pasan esta validación (ver Notas).
         ValueError: si el costo de mantener H (costo_unitario *
-    costo_mantener_pct_anual / 100) no es mayor que 0 en algún producto.
-    Sucede cuando costo_unitario == 0 o costo_mantener_pct_anual == 0.
-    Solo aplica si el DataFrame tiene filas.
+            costo_mantener_pct_anual / 100) no es mayor que 0 en algún producto.
+            Sucede cuando costo_unitario == 0 o costo_mantener_pct_anual == 0.
+            Solo aplica si el DataFrame tiene filas.
     """
 
     # Los parámetros escalares se validan primero: es la única validación que no

@@ -154,9 +154,11 @@ def clasificar_xyz(
           estadísticos se calculan sobre los valores no nulos del producto.
         - Una media <= 0 no tiene CV definido, así que devuelve cv=None (no
           solo el caso exacto de media cero).
-        - Un producto sin CV calculable sigue apareciendo en la salida, con
-          cv=None y clase_xyz=None, como marca explícita de "sin datos
-          suficientes" en lugar de desaparecer en silencio.
+        - Un producto con 2 o más periodos y media <= 0 (sin CV calculable)
+          sigue apareciendo en la salida, con cv=None y clase_xyz=None, como
+          marca explícita de "sin datos suficientes" en lugar de desaparecer en
+          silencio. Los productos con menos de 2 periodos se excluyen (ver
+          Returns).
 
     Raises:
         ValueError: si al DataFrame le falta alguna de las columnas requeridas

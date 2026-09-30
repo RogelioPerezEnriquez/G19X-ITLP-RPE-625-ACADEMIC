@@ -27,8 +27,10 @@ entrada.
 
 El tamaño de la ventana es un parámetro de :func:`estimar_demanda` y su valor
 por defecto viene de :data:`src.config.PARAMETROS_DEFAULT`
-(``demanda_ventana_default``, 6.0), que es la fuente única de verdad: cuando el
-MVP incorpore la tabla de configuración, de ahí saldrá su valor.
+(``demanda_ventana_default``, 6.0), que es la fuente única de verdad: refleja la
+fila correspondiente de la tabla ``parametros_configuracion`` y ya llega desde
+ahí en el pipeline (``src.recomendador`` la lee con
+:func:`src.config.cargar_parametros`).
 """
 
 import pandas as pd
