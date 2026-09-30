@@ -17,8 +17,8 @@ Desde la raiz del proyecto::
     python scripts/demo_flujo_completo.py
 
 El script carga las variables de ``.env`` (en la raiz) y usa ``SUPABASE_URL`` y
-``SUPABASE_SERVICE_ROLE_KEY``. La ``service_role key`` es necesaria porque el
-script lee las cuatro tablas de datos y escribe en ``recomendaciones`` y en
+``SUPABASE_SERVICE_ROLE_KEY``. La ``service_role key`` es necesaria porque, si se
+confirma el guardado, el script escribe en ``recomendaciones`` y en
 ``evaluaciones_criterios`` (las dos tienen RLS habilitado con politicas de solo
 lectura, asi que la ``anon key`` no alcanza para guardar).
 
@@ -32,17 +32,25 @@ Que hace
    pide confirmacion antes de escribir nada (ver "Limitacion conocida").
 4. Paso 1: ``generar_recomendaciones(supabase)`` (lectura de las cuatro tablas +
    motor OR).
-5. Paso 2: ``guardar_recomendaciones(supabase, recomendaciones)``, que devuelve
+5. Muestra el reporte de detalle (ver "Formato del reporte"): encabezado, cantidad
+   de recomendaciones generadas, una fila por producto con su proveedor y sus
+   numeros, y el resumen agregado. El reporte se imprime siempre, se guarde o no,
+   porque sale del DataFrame que devuelve el motor y no de la base.
+6. Pregunta ``Desea guardar las recomendaciones en Supabase? [S/N]``. El default
+   es "N": si el usuario solo presiona Enter (respuesta vacia) no se guarda nada.
+   Solo una respuesta explicita afirmativa ("s", "si", "y", "yes") hace que se
+   guarde. Si no se confirma, no se inserta ni se evalua nada y el flujo termina
+   con codigo 0 (ver "Si no se guarda, no hay evaluaciones").
+7. Paso 2: ``guardar_recomendaciones(supabase, recomendaciones)``, que devuelve
    las filas insertadas con su UUID.
-6. Paso 3: cruza los UUID con las recomendaciones del motor. Toma ``id`` y
+8. Paso 3: cruza los UUID con las recomendaciones del motor. Toma ``id`` y
    ``producto_id`` de lo guardado, renombra ``id`` a ``recomendacion_id`` y hace
    ``merge`` con las recomendaciones por ``producto_id`` (``how="inner"``).
    Verifica que el resultado tenga exactamente una fila por recomendacion.
-7. Paso 4: ``evaluar_y_guardar(supabase, recomendaciones_con_id)`` (rubrica de 6
+9. Paso 4: ``evaluar_y_guardar(supabase, recomendaciones_con_id)`` (rubrica de 6
    criterios + INSERT en ``evaluaciones_criterios``).
-8. Imprime los conteos de cada etapa y, al final, un resumen con las
-   recomendaciones guardadas, las evaluaciones esperadas (6 por recomendacion) y
-   el conteo leido de vuelta de la base.
+10. Imprime los conteos de cada etapa y, al final, el conteo leido de vuelta de la
+    base y la confirmacion de la escritura (solo si se guardo).
 
 Por que hace falta cruzar los UUID
 ----------------------------------
@@ -73,12 +81,45 @@ avisa (no limpia) si no lo esta. Con corridas anteriores:
   equivocada. El paso 3 aborta con un mensaje claro si el conteo no cuadra, en
   lugar de escribir evaluaciones cruzadas.
 
+Si no se guarda, no hay evaluaciones
+------------------------------------
+El reporte de detalle se arma con el DataFrame que devuelve el motor, asi que se
+puede mostrar sin escribir nada en Supabase. Las evaluaciones no: la rubrica
+necesita el ``recomendacion_id`` (el UUID que Supabase asigna al insertar la
+recomendacion), porque el motor produce las recomendaciones sin ``id``. Por eso
+responder que no a la pregunta de guardado no solo evita el INSERT en
+``recomendaciones``: tambien deja sin evaluar las recomendaciones generadas (la
+tabla ``evaluaciones_criterios`` referencia la recomendacion persistida por clave
+foranea). Es una limitacion del diseno, no algo que este flujo pueda rodear: para
+ver las evaluaciones hay que correrlo de nuevo y confirmar el guardado.
+
+Formato del reporte
+-------------------
+Texto plano, sin emojis ni colores ANSI (pensado para Windows). El orden es:
+
+1. Encabezado (titulo enmarcado con ``=``).
+2. ``Recomendaciones generadas: <n>``.
+3. Tabla de detalle con una fila por producto: ``producto``, ``proveedor``,
+   ``clase_abc``, ``clase_xyz``, ``urgencia``, ``stock_actual``,
+   ``punto_reorden``, ``cantidad_recomendada``, ``ahorro_neto_estimado`` y
+   ``score_proveedor``. La tabla se arma con ``|`` y ``-``.
+4. Resumen agregado: conteo de recomendaciones por urgencia, recomendaciones con
+   ``'Ahorro detectado'`` y suma de ``ahorro_neto_estimado``.
+5. Pregunta de guardado, y al final la confirmacion de la escritura en Supabase o
+   el mensaje de cancelacion si no se guardo (con la aclaracion de que, en ese
+   caso, tampoco se generaron evaluaciones).
+
+Las secciones 1 a 4 salen antes de la pregunta: el reporte de detalle es
+justamente lo que se mira para decidir si vale la pena guardar.
+
 Que NO hace
 -----------
 - No modifica el motor, el recomendador, el evaluador ni ningun otro archivo del
   repositorio.
 - No borra ni limpia recomendaciones ni evaluaciones existentes: solo inserta
   filas nuevas.
+- No escribe nada en Supabase si el usuario no confirma el guardado (y en ese caso
+  tampoco evalua: ver "Si no se guarda, no hay evaluaciones").
 - No inserta datos de prueba en ``productos``/``proveedores`` (para eso estan
   ``db/seed_sintetico.sql`` y ``scripts/verificar_*.py``).
 - No usa colores ANSI ni emojis: la salida es texto plano pensado para Windows.
@@ -92,7 +133,10 @@ modo que su paquete padre ``src`` tiene que ser importable. Agregar
 import interno del motor fallaria con ``ModuleNotFoundError``. Por eso se agrega
 ``backend`` (el padre de ``src``) y se importa como ``src.recomendador`` y
 ``src.evaluador``, que es exactamente como lo hacen los tests
-(``backend/tests/``).
+(``backend/tests/``). El script importa ademas ``ESTADO_AHORRO`` desde
+``src.motor.ahorro`` (la etiqueta del criterio 6) y ``ORDEN_URGENCIA`` desde
+``src.recomendador`` para armar el resumen del reporte sin repetir los textos a
+mano, igual que ``scripts/demo_recomendador.py``.
 
 Contrato de errores
 -------------------
@@ -103,6 +147,9 @@ Contrato de errores
   silencio ni se sigue con datos a medias.
 - Tabla ``recomendaciones`` con filas y el usuario no confirma: no se escribe
   nada y se sale con codigo 0 (no es un error).
+- El usuario responde que no a la pregunta de guardado (o solo presiona Enter):
+  no se escribe nada, no se generan evaluaciones y se sale con codigo 0 (no es un
+  error). El reporte de detalle se imprime igual.
 - Sin recomendaciones que guardar (ningun producto valido): no se escribe nada y
   se sale con codigo 0.
 - Conteos finales que no cuadran: se reporta y se sale con codigo 1.
@@ -131,7 +178,9 @@ from src.evaluador import (  # noqa: E402
     TABLA_EVALUACIONES,
     evaluar_y_guardar,
 )
+from src.motor.ahorro import ESTADO_AHORRO  # noqa: E402
 from src.recomendador import (  # noqa: E402
+    ORDEN_URGENCIA,
     generar_recomendaciones,
     guardar_recomendaciones,
 )
@@ -202,6 +251,120 @@ def _imprimir_cabecera(titulo: str) -> None:
     print("=" * ANCHO_REPORTE)
 
 
+def _formato_numero(valor: float) -> str:
+    """Formatea un numero con separador de miles y dos decimales."""
+    return f"{valor:,.2f}"
+
+
+def _imprimir_tabla(encabezados: list[str], filas: list[list[str]]) -> None:
+    """Imprime una tabla de texto plano con ``|`` y ``-`` (sin ANSI ni emojis).
+
+    Args:
+        encabezados: titulos de las columnas.
+        filas: filas ya convertidas a texto, con la misma cantidad de celdas que
+            ``encabezados``.
+    """
+    anchos: list[int] = [len(encabezado) for encabezado in encabezados]
+    for fila in filas:
+        for indice, celda in enumerate(fila):
+            anchos[indice] = max(anchos[indice], len(celda))
+
+    def _linea(valores: list[str]) -> str:
+        celdas = " | ".join(
+            valor.ljust(anchos[indice]) for indice, valor in enumerate(valores)
+        )
+        return f"| {celdas} |"
+
+    separador = "|" + "|".join("-" * (ancho + 2) for ancho in anchos) + "|"
+    print(_linea(encabezados))
+    print(separador)
+    for fila in filas:
+        print(_linea(fila))
+
+
+def _imprimir_reporte(recomendaciones: pd.DataFrame) -> None:
+    """Imprime el encabezado del reporte y la tabla de detalle por producto.
+
+    La tabla tiene una fila por recomendacion generada, con lo que hace falta para
+    verificar que un cambio de configuracion movio los resultados: el proveedor
+    elegido, las clases ABC/XYZ, la urgencia, el stock contra el punto de reorden,
+    la cantidad recomendada, el ahorro neto estimado y el score del proveedor.
+
+    Args:
+        recomendaciones: DataFrame devuelto por
+            :func:`src.recomendador.generar_recomendaciones`.
+    """
+    _imprimir_cabecera("REPORTE DE RECOMENDACIONES DE COMPRA")
+    print(f"Recomendaciones generadas: {len(recomendaciones)}")
+    print()
+
+    if recomendaciones.empty:
+        print("No hay recomendaciones: ningun producto cumple los criterios minimos")
+        print("(al menos 2 periodos de historial, proveedor asociado y CV calculable).")
+        return
+
+    encabezados: list[str] = [
+        "producto",
+        "proveedor",
+        "clase_abc",
+        "clase_xyz",
+        "urgencia",
+        "stock_actual",
+        "punto_reorden",
+        "cantidad_recomendada",
+        "ahorro_neto_estimado",
+        "score_proveedor",
+    ]
+    filas: list[list[str]] = [
+        [
+            str(fila["nombre"]),
+            str(fila["proveedor_nombre"]),
+            str(fila["clase_abc"]),
+            str(fila["clase_xyz"]),
+            str(fila["urgencia"]),
+            _formato_numero(float(fila["stock_actual"])),
+            _formato_numero(float(fila["punto_reorden"])),
+            _formato_numero(float(fila["cantidad_recomendada"])),
+            _formato_numero(float(fila["ahorro_neto_estimado"])),
+            _formato_numero(float(fila["score_proveedor"])),
+        ]
+        for _, fila in recomendaciones.iterrows()
+    ]
+    _imprimir_tabla(encabezados, filas)
+    print()
+    print("Leyenda: clase_abc/clase_xyz = clasificacion del producto; urgencia")
+    print("comparada contra stock_seguridad (Critico) y punto_reorden (Atencion).")
+
+
+def _imprimir_resumen(recomendaciones: pd.DataFrame) -> None:
+    """Imprime el resumen agregado (urgencia, ahorro y suma de ahorro neto).
+
+    Args:
+        recomendaciones: DataFrame devuelto por
+            :func:`src.recomendador.generar_recomendaciones`.
+    """
+    print()
+    print("-" * ANCHO_REPORTE)
+    print("RESUMEN")
+    print("-" * ANCHO_REPORTE)
+
+    if recomendaciones.empty:
+        print("Sin filas que resumir.")
+        return
+
+    conteo_urgencia = recomendaciones["urgencia"].value_counts()
+    print("Recomendaciones por urgencia:")
+    for urgencia in ORDEN_URGENCIA:
+        print(f"  - {urgencia:<11}: {int(conteo_urgencia.get(urgencia, 0))}")
+
+    con_ahorro = int((recomendaciones["estado_ahorro"] == ESTADO_AHORRO).sum())
+    ahorro_total = float(recomendaciones["ahorro_neto_estimado"].sum())
+
+    print()
+    print(f"Recomendaciones con '{ESTADO_AHORRO}': {con_ahorro}")
+    print(f"Suma de ahorro_neto_estimado: {_formato_numero(ahorro_total)}")
+
+
 def _contar_recomendaciones_existentes(supabase: Client) -> int:
     """Cuenta las recomendaciones que ya hay en la tabla (0 si esta vacia).
 
@@ -266,6 +429,31 @@ def _confirmar_continuar(existentes: int) -> bool:
         respuesta = input("Desea continuar de todas formas? [S/N]: ")
     except EOFError:
         print("Sin entrada estandar disponible: no se hizo nada.")
+        return False
+    return respuesta.strip().lower() in RESPUESTAS_AFIRMATIVAS
+
+
+def _preguntar_guardar() -> bool:
+    """Pregunta si se quieren guardar las recomendaciones en Supabase.
+
+    El default es "no": si el usuario solo presiona Enter (respuesta vacia) no se
+    guarda nada. Solo cuenta como afirmativa una respuesta explicita ("s", "si",
+    "y", "yes", sin importar mayusculas/minusculas y espacios alrededor).
+
+    Returns:
+        ``True`` solo si el usuario responde afirmativamente; ``False`` en
+        cualquier otra respuesta o si no hay entrada estandar disponible (por
+        ejemplo, cuando el script se corre sin consola interactiva).
+
+    Notas:
+        Si no hay entrada estandar, se asume "no" y no se escribe nada: es el
+        default seguro (una corrida no interactiva, como la de un CI, no debe
+        escribir en la base por accidente).
+    """
+    try:
+        respuesta = input("Desea guardar las recomendaciones en Supabase? [S/N]: ")
+    except EOFError:
+        print("Sin entrada estandar disponible: no se guardo nada.")
         return False
     return respuesta.strip().lower() in RESPUESTAS_AFIRMATIVAS
 
@@ -380,15 +568,16 @@ def _contar_evaluaciones(supabase: Client, recomendacion_ids: list) -> int | Non
     return int(respuesta.count)
 
 
-def _imprimir_resumen(
-    recomendaciones: int,
+def _imprimir_confirmacion_guardado(
+    recomendaciones_guardadas: int,
     evaluaciones_esperadas: int,
     evaluaciones_confirmadas: int | None,
 ) -> bool:
-    """Imprime el resumen final del flujo.
+    """Imprime la confirmacion de la escritura en Supabase y verifica los conteos.
 
     Args:
-        recomendaciones: cantidad de recomendaciones guardadas en esta corrida.
+        recomendaciones_guardadas: cantidad de recomendaciones guardadas en esta
+            corrida.
         evaluaciones_esperadas: 6 por recomendacion (una fila por criterio).
         evaluaciones_confirmadas: conteo leido de vuelta de
             ``evaluaciones_criterios`` para esas recomendaciones, o ``None`` si no
@@ -400,14 +589,15 @@ def _imprimir_resumen(
     """
     print()
     print("=" * ANCHO_REPORTE)
-    print("RESUMEN DEL FLUJO")
+    print("CONFIRMACION EN SUPABASE")
     print("=" * ANCHO_REPORTE)
-    print(f"{'Recomendaciones':<32}: {recomendaciones}")
+    print(f"{'Recomendaciones guardadas':<32}: {recomendaciones_guardadas}")
     print(f"{'Evaluaciones (6 x recomendacion)':<32}: {evaluaciones_esperadas}")
 
     if evaluaciones_confirmadas is None:
         print(f"{'Evaluaciones confirmadas':<32}: no se pudo leer el conteo exacto.")
         print()
+        print("Recomendaciones y evaluaciones guardadas en Supabase.")
         print("Verifique en Supabase con:")
         print("  select recomendacion_id, count(*) from evaluaciones_criterios")
         print("  group by recomendacion_id;")
@@ -422,8 +612,11 @@ def _imprimir_resumen(
         print("       flujo por bueno.")
         return False
 
-    print("OK: el flujo completo termino y quedo confirmado en Supabase.")
-    print(f"  - {recomendaciones} filas en la tabla '{TABLA_RECOMENDACIONES}'")
+    print("Recomendaciones y evaluaciones guardadas en Supabase.")
+    print(
+        f"  - {recomendaciones_guardadas} filas en la tabla "
+        f"'{TABLA_RECOMENDACIONES}'"
+    )
     print(f"  - {evaluaciones_confirmadas} filas en la tabla '{TABLA_EVALUACIONES}'")
     print("  - cada recomendacion quedo con sus 6 criterios evaluados.")
     return True
@@ -431,6 +624,10 @@ def _imprimir_resumen(
 
 def main() -> int:
     """Punto de entrada del demo.
+
+    Genera las recomendaciones, imprime el reporte de detalle (encabezado,
+    cantidad generada, tabla por producto y resumen agregado), pregunta si
+    guardarlas (default: no) y, solo si se confirma, guarda y evalua.
 
     Returns:
         Codigo de salida del proceso: 0 si el flujo termino bien (incluidos los
@@ -475,12 +672,25 @@ def main() -> int:
         print(f"       Causa: {type(error).__name__}: {error}")
         return 1
 
-    print(f"      Recomendaciones generadas: {len(recomendaciones)}")
+    # --- Reporte de detalle -------------------------------------------------
+    # Sale del DataFrame que devuelve el motor, asi que se imprime siempre (se
+    # guarde o no) y antes de la pregunta de guardado: es lo que se mira para
+    # decidir si vale la pena guardar.
+    _imprimir_reporte(recomendaciones)
+    _imprimir_resumen(recomendaciones)
+
     if recomendaciones.empty:
         print()
-        print("No hay recomendaciones: ningun producto cumple los criterios minimos")
-        print("(al menos 2 periodos de historial, proveedor asociado y CV calculable).")
         print("No se guardo ni se evaluo nada. Fin.")
+        return 0
+
+    # --- Decision del usuario: guardar o no (default: no guardar) -----------
+    print()
+    if not _preguntar_guardar():
+        print("Operacion cancelada: no se escribio nada en Supabase.")
+        print(f"Las {len(recomendaciones)} recomendaciones de arriba se generaron y se")
+        print("muestran en el reporte, pero no se guardaron: sin el 'recomendacion_id'")
+        print("que asigna Supabase al insertar, la rubrica no se puede evaluar.")
         return 0
 
     # --- Paso 2: guardar las recomendaciones --------------------------------
@@ -518,7 +728,7 @@ def main() -> int:
         print(f"       Causa: {type(error).__name__}: {error}")
         return 1
 
-    # --- Verificacion y resumen ---------------------------------------------
+    # --- Verificacion y confirmacion de la escritura ------------------------
     esperadas: int = EVALUACIONES_POR_RECOMENDACION * len(con_id)
     try:
         confirmadas: int | None = _contar_evaluaciones(
@@ -531,7 +741,11 @@ def main() -> int:
         print(f"       Causa: {type(error).__name__}: {error}")
         return 1
 
-    return 0 if _imprimir_resumen(len(con_id), esperadas, confirmadas) else 1
+    return (
+        0
+        if _imprimir_confirmacion_guardado(len(con_id), esperadas, confirmadas)
+        else 1
+    )
 
 
 if __name__ == "__main__":
