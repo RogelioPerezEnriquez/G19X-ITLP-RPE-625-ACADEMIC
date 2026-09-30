@@ -5,25 +5,6 @@ aspectos a revisar antes de cerrar el MVP.
 
 ## Deuda técnica
 
-- [ ] **Actualizar referencias obsoletas en `config.py`, `xyz.py` y `evaluador.py`**
-      - Quedan referencias a constantes que ya no existen (migradas a
-        `PARAMETROS_DEFAULT`).
-      - Líneas afectadas:
-        - `config.py:51` (docstring).
-        - `config.py:52-54`, `config.py:78` (encabezado del comentario).
-        - `config.py:81` (referencia a `UMBRAL_AHORRO_PCT_DEFAULT`).
-        - `config.py:82-84` (referencias a `UMBRAL_X`/`UMBRAL_Y`/
-          `VENTANA_DEFAULT`).
-        - `config.py:85-86` (referencias a `RATIO_MIN`/`RATIO_MAX`/
-          `CV_ALTA`/`CV_MODERADA`).
-        - `config.py:87-88` (referencias a `UMBRAL_CONFIABLE`/
-          `UMBRAL_RIESGOSO`).
-        - `motor/xyz.py:140-144` (referencias a `UMBRAL_X`/`UMBRAL_Y`).
-        - `evaluador.py:172-173` (referencias a `UMBRAL_X`/`UMBRAL_Y`).
-        - `evaluador.py:182` (referencia a `UMBRAL_AHORRO_PCT_DEFAULT`).
-      - Revisar al final de la fase de configurabilidad o durante la
-        limpieza final.
-
 - [ ] **Configurabilidad completa de parámetros** (post-MVP)
       - La tabla `parametros_configuracion` tiene 10 filas.
         Los parámetros configurables son: `abc_clase_a_pct`, `abc_clase_b_pct`,
@@ -70,6 +51,17 @@ aspectos a revisar antes de cerrar el MVP.
 
 ## Resueltos
 
+- [x] **Limpiar referencias obsoletas a constantes migradas**
+      - `config.py`: eliminadas 10 referencias a constantes obsoletas
+        (`UMBRAL_CLASE_A`, `UMBRAL_CLASE_B`, `UMBRAL_X`, `UMBRAL_Y`,
+        `VENTANA_DEFAULT`, `UMBRAL_CONFIABLE`, `UMBRAL_RIESGOSO`,
+        `UMBRAL_AHORRO_PCT_DEFAULT`, `RATIO_MIN`, `RATIO_MAX`) y 2 frases
+        obsoletas. En su lugar, se dejó un mapeo explícito
+        `clave -> parámetro de función` para cada una de las 10 claves.
+      - `xyz.py`: eliminadas 2 referencias a `CV_ALTA`/`CV_MODERADA`.
+      - `evaluador.py`: ya estaba limpio (referencias eliminadas en el
+        commit de parametrización del evaluador).
+
 - [x] **Parametrización completa de la fase de configurabilidad**
       - Los 5 módulos del motor (abc, xyz, demanda, proveedor, ahorro)
         reciben sus umbrales como parámetros con defaults de
@@ -98,8 +90,7 @@ aspectos a revisar antes de cerrar el MVP.
   - `TOLERANCIA_SCORE` (proveedor.py): 1e-9
   - `TOLERANCIA_AHORRO` (ahorro.py): 1e-9
   - `TOLERANCIA_RATIO`, `TOLERANCIA_CV`, `TOLERANCIA_SCORE`,
-    `TOLERANCIA_AHORRO` (evaluador.py): 1e-9 (los umbrales ya no son
-    constantes locales, pero las tolerancias se conservan).
+    `TOLERANCIA_AHORRO` (evaluador.py): 1e-9.
 
 - **Año comercial de 360 días**: `eoq_rop.py` y `ahorro.py` usan 12
   periodos/año y 30 días/periodo por defecto, lo que implica un año de
@@ -184,6 +175,16 @@ aspectos a revisar antes de cerrar el MVP.
 
 ## Notas de integración
 
+- **Verificación end-to-end de configurabilidad (RF-11)**: se verificó que
+  los parámetros de `parametros_configuracion` afectan los resultados del
+  motor:
+  - Prueba 1: bajar `abc_clase_a_pct` de 80 a 50 cambió la clase ABC de 3
+    productos (Widget B, Pintura 1L, Widget A pasaron de A a B).
+  - Prueba 2: subir `ahorro_neto_min_pct` de 3 a 10 redujo los productos
+    con "Ahorro detectado" de 2 a 0.
+  - Restauración: los 10 parámetros se restauraron a sus valores originales
+    y las tablas `recomendaciones`/`evaluaciones_criterios` quedaron vacías.
+
 - **Verificación end-to-end exitosa (recomendador)**: el recomendador
   funciona con los datos reales del seed. Se generaron 6 recomendaciones:
   - Atención: 1 (SEED_Engrane G7)
@@ -210,16 +211,6 @@ aspectos a revisar antes de cerrar el MVP.
   El dashboard de Supabase los muestra en orden arbitrario (a veces
   alfabético). Si el frontend quiere mostrarlos en orden lógico, debe
   hacer un ORDER BY con CASE o guardar un campo `orden_criterio`.
-
-- **Verificación end-to-end de configurabilidad (RF-11)**: se verificó que
-  los parámetros de `parametros_configuracion` afectan los resultados del
-  motor:
-  - Prueba 1: bajar `abc_clase_a_pct` de 80 a 50 cambió la clase ABC de 3
-    productos (Widget B, Pintura 1L, Widget A pasaron de A a B).
-  - Prueba 2: subir `ahorro_neto_min_pct` de 3 a 10 redujo los productos
-    con "Ahorro detectado" de 2 a 0.
-  - Restauración: los 10 parámetros se restauraron a sus valores originales
-    y las tablas `recomendaciones`/`evaluaciones_criterios` quedaron vacías.
 
 ## Casos conocidos y documentados
 
