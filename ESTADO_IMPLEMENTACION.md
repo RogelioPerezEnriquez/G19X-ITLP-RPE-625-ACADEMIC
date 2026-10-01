@@ -50,7 +50,7 @@ funcionales).
 | Configurabilidad | ✅ Completo | Los 10 parámetros de `parametros_configuracion` llegan a los módulos del motor como argumentos (RF-11), y se verificó end-to-end que cambiarlos altera los resultados. Otras constantes (pesos del score, periodos por año, margen de seguridad, `MIN_PERIODOS`, etiquetas de urgencia) siguen en código por decisión de alcance: ver `PENDIENTES.md`. |
 | Agente conversacional | ⏳ Pendiente | RF-09 y RF-10. El paquete `backend/src/agente/` existe, pero solo contiene un `__init__.py` vacío. |
 | Frontend | ⏳ Pendiente | RF-07, RF-08 y RF-12. El directorio `frontend/` todavía no existe en el repositorio. |
-| Script de ingesta | ⏳ Pendiente | RF-01. El paquete `backend/src/ingesta/` existe, pero solo contiene un `__init__.py` vacío. Hoy los datos entran aplicando `db/seed_sintetico.sql` a mano en el SQL Editor de Supabase. |
+| Script de ingesta | ✅ Completo | RF-01. `backend/src/ingesta/cargar_dataset.py` + CLI + CSVs de ejemplo en `data/raw/`. |
 
 ---
 
@@ -260,46 +260,36 @@ recomendador. El listado y el motivo están en `PENDIENTES.md`.
 
 ## Lo que falta
 
-Falta toda la capa de interacción. El sistema calcula, evalúa y persiste, pero se
-opera desde scripts de terminal: no hay forma de cargar datos sin SQL manual, de
-preguntar en lenguaje natural ni de ver la cola de recomendaciones en pantalla.
-Por eso los criterios de aceptación 1, 4, 5, 6 y 8 de `MVP.md` §15 todavía no se
-cumplen.
+Falta toda la capa de interacción. El sistema calcula, evalúa, persiste y
+permite cargar datos desde CSV/Excel, pero se opera desde scripts de
+terminal: no hay forma de preguntar en lenguaje natural ni de ver la cola
+de recomendaciones en pantalla. Por eso los criterios de aceptación 4, 5,
+6 y 8 de `MVP.md` §15 todavía no se cumplen.
 
 ### Agente conversacional
 
 Pendiente (RF-09 y RF-10, `MVP.md` §12). El paquete
-`backend/src/agente/` existe, pero está vacío: no hay funciones de consulta, ni
-integración con la API del LLM, ni grounding, ni la restricción de solo lectura
-implementada en código. Lo único verificado es que la conexión con el proveedor
-de LLM (Z.ai / GLM) funciona, mediante `scripts/verificar_zai.py`. Las cinco
-funciones de solo lectura que define el MVP (`buscar_recomendaciones`,
-`detalle_recomendacion`, `explicar_criterio`, `comparar_proveedores`,
-`resumen_prioridad_ABC_XYZ`) están especificadas pero no implementadas. Esto no
-bloquea al resto del sistema: el motor y el evaluador no dependen del agente.
+`backend/src/agente/` existe, pero está vacío: no hay funciones de consulta,
+ni integración con la API del LLM, ni grounding, ni la restricción de solo
+lectura implementada en código. Lo único verificado es que la conexión con
+el proveedor de LLM (Z.ai / GLM) funciona, mediante
+`scripts/verificar_zai.py`. Las cinco funciones de solo lectura que define
+el MVP (`buscar_recomendaciones`, `detalle_recomendacion`,
+`explicar_criterio`, `comparar_proveedores`, `resumen_prioridad_ABC_XYZ`)
+están especificadas pero no implementadas. Esto no bloquea al resto del
+sistema: el motor y el evaluador no dependen del agente.
 
 ### Frontend
 
 Pendiente (RF-07, RF-08 y RF-12, `MVP.md` §13). No existe el directorio
 `frontend/`: no hay proyecto Vue 3, ni cola de recomendaciones, ni panel de
-explicabilidad, ni vista de proveedores, ni chat, ni panel de KPIs, ni pantalla
-de inicio de sesión con Supabase Auth. El backend ya deja los datos listos para
-esa capa: `recomendaciones` y `evaluaciones_criterios` se pueden leer con la
-`anon key` gracias a las políticas de solo lectura, y el `check` de la tabla
-limita los criterios a los 6 previstos. Queda un pendiente de diseño menor para
-esa fase: la tabla no guarda el orden lógico de los criterios (ver
-`PENDIENTES.md`).
-
-### Script de ingesta
-
-Pendiente (RF-01, `MVP.md` §8.3). El paquete `backend/src/ingesta/`
-existe, pero está vacío. Hoy los datos se cargan ejecutando `db/schema.sql` y
-`db/seed_sintetico.sql` a mano en el SQL Editor de Supabase. Falta el script que
-lea CSV/Excel con pandas, valide columnas y campos clave e inserte en Supabase
-con la `service_role key`. El motor no depende del formato de origen (requisito
-no funcional de `MVP.md` §7), así que implementarlo no exige cambios en los
-módulos existentes.
-
+explicabilidad, ni vista de proveedores, ni chat, ni panel de KPIs, ni
+pantalla de inicio de sesión con Supabase Auth. El backend ya deja los datos
+listos para esa capa: `recomendaciones` y `evaluaciones_criterios` se pueden
+leer con la `anon key` gracias a las políticas de solo lectura, y el `check`
+de la tabla limita los criterios a los 6 previstos. Queda un pendiente de
+diseño menor para esa fase: la tabla no guarda el orden lógico de los
+criterios (ver `PENDIENTES.md`).
 ---
 
 ## Cómo verificar el estado actual

@@ -63,6 +63,12 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
         `ahorro.py`.
       - Bajo costo, previene regresiones.
 
+- [ ] **Policy de UPDATE para `parametros_configuracion`** (fase frontend)
+      - Actualmente solo tiene policy de SELECT para anon/authenticated.
+      - El criterio de aceptación 8 requiere que solo admins puedan
+        modificar parámetros.
+      - Resolver al implementar la pantalla de configuración (fase 6).
+
 ## Resueltos
 
 - [x] **Auditoría de docstrings y corrección de hallazgos**
