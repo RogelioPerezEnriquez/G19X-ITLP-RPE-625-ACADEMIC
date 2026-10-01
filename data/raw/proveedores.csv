@@ -1,0 +1,5 @@
+nombre,cumplimiento_entrega_pct,tasa_defectos_pct
+SEED_ProvCo,95,2
+SEED_FastParts,82,8
+SEED_CheapSupply,70,15
+SEED_RiesgoTotal,50,25

@@ -1,0 +1,9 @@
+producto_nombre,proveedor_nombre,precio_unitario,lead_time_dias,cantidad_umbral_descuento,descuento_pct
+SEED_Widget A,SEED_ProvCo,24.50,7,,
+SEED_Widget A,SEED_CheapSupply,22.00,12,500,5
+SEED_Widget B,SEED_FastParts,17.50,5,300,3
+SEED_Tornillo M3,SEED_CheapSupply,0.75,10,5000,8
+SEED_Cable HDMI,SEED_FastParts,6.20,6,,
+SEED_Engrane G7,SEED_ProvCo,83.00,9,200,10
+SEED_Engrane G7,SEED_RiesgoTotal,78.00,15,,
+SEED_Pintura 1L,SEED_ProvCo,11.80,8,,

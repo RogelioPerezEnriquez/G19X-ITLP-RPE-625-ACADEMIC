@@ -1,0 +1,7 @@
+nombre,categoria,costo_unitario,stock_actual,costo_ordenar,costo_mantener_pct_anual
+SEED_Widget A,Componentes,25.00,30,50,20
+SEED_Widget B,Componentes,18.00,120,45,20
+SEED_Tornillo M3,Fijaciones,0.80,950,20,15
+SEED_Cable HDMI,Electrónica,6.50,400,35,25
+SEED_Engrane G7,Mecánica,85.00,15,80,22
+SEED_Pintura 1L,Químicos,12.00,260,40,18
