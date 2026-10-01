@@ -69,6 +69,15 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
         modificar parámetros.
       - Resolver al implementar la pantalla de configuración (fase 6).
 
+- [ ] **Múltiples recomendaciones por producto** (post-MVP)
+      - La tabla `recomendaciones` no tiene constraint único por
+        `producto_id`, así que cada corrida del pipeline agrega filas.
+      - Las tools del agente devuelven "la más reciente" en los casos
+        de detalle, pero `buscar_recomendaciones` y `resumen_*`
+        cuentan duplicados si hay varias corridas.
+      - Solución a futuro: añadir un campo `activa` (boolean) y filtrar
+        por él, o añadir un constraint único por (producto_id, activa).
+
 ## Resueltos
 
 - [x] **Auditoría de docstrings y corrección de hallazgos**

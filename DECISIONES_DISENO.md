@@ -583,6 +583,32 @@ caso que lo ejercita", que es lo que la evaluación del MVP necesita demostrar.
 **Implementación**: `db/seed_sintetico.sql` (comentarios de cabecera de cada
 bloque); resultados observados en `ESTADO_IMPLEMENTACION.md`.
 
+## D-11: Tools del agente usan `producto_nombre` en lugar de `producto_id`
+
+**Contexto**: El MVP.md §12 define las tools del agente con firma
+`detalle_recomendacion(producto_id)` y `explicar_criterio(producto_id,
+criterio)`. Sin embargo, el agente es una interfaz conversacional: los
+usuarios preguntan por nombre ("¿qué pasa con SEED_Widget A?"), no por
+UUIDs.
+
+**Alternativas consideradas**:
+- A) Usar `producto_id` (UUID) como el MVP.
+- B) Usar `producto_nombre`.
+- C) Aceptar ambos.
+
+**Decisión**: **B** (usar `producto_nombre`).
+
+**Justificación**:
+1. El LLM no conoce los UUIDs del sistema.
+2. El usuario pregunta por nombre.
+3. La tool hace el lookup nombre → UUID internamente.
+
+**Consecuencias**:
+- Firma de las tools distinta al MVP (documentado aquí).
+- Si hay nombres duplicados, la tool lanza `ValueError`.
+- Si en el futuro se necesita `producto_id`, se puede añadir como
+  parámetro opcional.
+  
 ---
 
 ## Otras decisiones menores
