@@ -121,6 +121,18 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
 - [x] **Acoplamiento de unidades entre `eoq_rop.py` y `ahorro.py`**
       - `recomendador.py` pasa el mismo `periodos_por_año` a ambos módulos.
 
+- [x] **Script de ingesta desde CSV/Excel a Supabase (RF-01)**
+      - Script en `backend/src/ingesta/cargar_dataset.py`.
+      - CLI en `backend/src/ingesta/__main__.py`.
+      - Carga 4 tablas: productos, proveedores, producto_proveedor,
+        historial_demanda.
+      - Resuelve las FKs por nombre (los CSVs usan nombres legibles, no
+        UUIDs).
+      - Valida que las tablas estén vacías antes de insertar (evita
+        duplicidad).
+      - Normaliza fechas a ISO y tipos numéricos antes de insertar.
+      - CSVs de ejemplo en `data/raw/`.      
+
 ## Notas de configurabilidad
 
 - **`config.py` es el único punto de entrada de parámetros.** Ningún módulo
