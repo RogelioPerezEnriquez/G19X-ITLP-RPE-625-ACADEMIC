@@ -63,12 +63,6 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
         `ahorro.py`.
       - Bajo costo, previene regresiones.
 
-- [ ] **Policy de UPDATE para `parametros_configuracion`** (fase frontend)
-      - Actualmente solo tiene policy de SELECT para anon/authenticated.
-      - El criterio de aceptación 8 requiere que solo admins puedan
-        modificar parámetros.
-      - Resolver al implementar la pantalla de configuración (fase 6).
-
 - [ ] **Múltiples recomendaciones por producto** (post-MVP)
       - La tabla `recomendaciones` no tiene constraint único por
         `producto_id`, así que cada corrida del pipeline agrega filas.
@@ -78,7 +72,37 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
       - Solución a futuro: añadir un campo `activa` (boolean) y filtrar
         por él, o añadir un constraint único por (producto_id, activa).
 
+- [ ] **Policy de UPDATE para `parametros_configuracion`** (fase frontend)
+      - Actualmente solo tiene policy de SELECT para anon/authenticated.
+      - El criterio de aceptación 8 requiere que solo admins puedan
+        modificar parámetros.
+      - Resolver al implementar la pantalla de configuración (fase 6).
+
 ## Resueltos
+
+- [x] **Agente conversacional (RF-09, RF-10)**
+      - 5 tools de solo lectura en `backend/src/agente/tools.py`.
+      - Cliente LLM con function calling en
+        `backend/src/agente/llm_client.py`.
+      - Esquema de tools en `backend/src/agente/tools_schema.py`.
+      - Grounding verificado con el LLM real (Z.ai): el agente responde
+        con datos reales y rechaza responder cuando no los tiene.
+      - RF-10 verificado: indica explícitamente cuando no hay datos.
+      - Restricción de solo lectura: usa `SUPABASE_ANON_KEY`.
+      - Script de verificación manual en
+        `scripts/verificar_agente_rapido.py`.
+
+- [x] **Script de ingesta desde CSV/Excel a Supabase (RF-01)**
+      - Script en `backend/src/ingesta/cargar_dataset.py`.
+      - CLI en `backend/src/ingesta/__main__.py`.
+      - Carga 4 tablas: productos, proveedores, producto_proveedor,
+        historial_demanda.
+      - Resuelve las FKs por nombre (los CSVs usan nombres legibles, no
+        UUIDs).
+      - Valida que las tablas estén vacías antes de insertar (evita
+        duplicidad).
+      - Normaliza fechas a ISO y tipos numéricos antes de insertar.
+      - CSVs de ejemplo en `data/raw/`.
 
 - [x] **Auditoría de docstrings y corrección de hallazgos**
       - Auditoría completa de los 9 módulos de producción (con AST parsing,
@@ -136,18 +160,6 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
 - [x] **Acoplamiento de unidades entre `eoq_rop.py` y `ahorro.py`**
       - `recomendador.py` pasa el mismo `periodos_por_año` a ambos módulos.
 
-- [x] **Script de ingesta desde CSV/Excel a Supabase (RF-01)**
-      - Script en `backend/src/ingesta/cargar_dataset.py`.
-      - CLI en `backend/src/ingesta/__main__.py`.
-      - Carga 4 tablas: productos, proveedores, producto_proveedor,
-        historial_demanda.
-      - Resuelve las FKs por nombre (los CSVs usan nombres legibles, no
-        UUIDs).
-      - Valida que las tablas estén vacías antes de insertar (evita
-        duplicidad).
-      - Normaliza fechas a ISO y tipos numéricos antes de insertar.
-      - CSVs de ejemplo en `data/raw/`.      
-
 ## Notas de configurabilidad
 
 - **`config.py` es el único punto de entrada de parámetros.** Ningún módulo
@@ -170,6 +182,18 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
   también. Esto permite añadir parámetros a la tabla sin tocar `config.py`.
 
 ## Notas de integración
+
+- **Verificación end-to-end del agente**: se verificó el agente
+  conversacional contra el LLM real (Z.ai) con 7 preguntas:
+  - Consulta general (conteos por urgencia, resumen).
+  - Pregunta de seguimiento (manejo de historial).
+  - Producto inexistente (RF-10).
+  - Productos en atención (filtrado).
+  - Detalle de un producto (grounding).
+  - Comparación de proveedores (grounding).
+  - Resumen de prioridades ABC/XYZ.
+  El agente respondió con datos reales en todos los casos y rechazó
+  responder cuando no había datos.
 
 - **Verificación end-to-end de configurabilidad (RF-11)**: se verificó que
   los parámetros de `parametros_configuracion` afectan los resultados del

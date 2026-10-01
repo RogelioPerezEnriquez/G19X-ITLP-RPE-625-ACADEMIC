@@ -48,7 +48,7 @@ funcionales).
 | Recomendador | ✅ Completo | `backend/src/recomendador.py` orquesta el motor (RF-05) y persiste en `recomendaciones`. Verificado contra el seed: 6 recomendaciones generadas. |
 | Evaluador (rúbrica de 6 criterios) | ✅ Completo | `backend/src/evaluador.py` (RF-06), 76 tests. Escribe en `evaluaciones_criterios`: 6 recomendaciones × 6 criterios = 36 evaluaciones por corrida completa. |
 | Configurabilidad | ✅ Completo | Los 10 parámetros de `parametros_configuracion` llegan a los módulos del motor como argumentos (RF-11), y se verificó end-to-end que cambiarlos altera los resultados. Otras constantes (pesos del score, periodos por año, margen de seguridad, `MIN_PERIODOS`, etiquetas de urgencia) siguen en código por decisión de alcance: ver `PENDIENTES.md`. |
-| Agente conversacional | ⏳ Pendiente | RF-09 y RF-10. El paquete `backend/src/agente/` existe, pero solo contiene un `__init__.py` vacío. |
+| Agente conversacional | ✅ Completo | RF-09 y RF-10. El paquete `backend/src/agente/` existe, pero solo contiene un `__init__.py` vacío. |
 | Frontend | ⏳ Pendiente | RF-07, RF-08 y RF-12. El directorio `frontend/` todavía no existe en el repositorio. |
 | Script de ingesta | ✅ Completo | RF-01. `backend/src/ingesta/cargar_dataset.py` + CLI + CSVs de ejemplo en `data/raw/`. |
 
@@ -78,10 +78,12 @@ Distribución de tests por archivo:
 | `backend/tests/test_demanda.py` | 36 |
 | `backend/tests/test_eoq_rop.py` | 30 |
 | `backend/tests/test_evaluador.py` | 76 |
+| `backend/tests/test_llm_client.py` | 18 |
 | `backend/tests/test_proveedor.py` | 45 |
 | `backend/tests/test_recomendador.py` | 37 |
+| `backend/tests/test_tools.py` | 24 |
 | `backend/tests/test_xyz.py` | 51 |
-| **Total** | **403** |
+| **Total** | **445** |
 
 Resultado observado de la corrida del flujo completo contra el seed (commit de
 referencia):
@@ -260,24 +262,11 @@ recomendador. El listado y el motivo están en `PENDIENTES.md`.
 
 ## Lo que falta
 
-Falta toda la capa de interacción. El sistema calcula, evalúa, persiste y
-permite cargar datos desde CSV/Excel, pero se opera desde scripts de
-terminal: no hay forma de preguntar en lenguaje natural ni de ver la cola
-de recomendaciones en pantalla. Por eso los criterios de aceptación 4, 5,
-6 y 8 de `MVP.md` §15 todavía no se cumplen.
-
-### Agente conversacional
-
-Pendiente (RF-09 y RF-10, `MVP.md` §12). El paquete
-`backend/src/agente/` existe, pero está vacío: no hay funciones de consulta,
-ni integración con la API del LLM, ni grounding, ni la restricción de solo
-lectura implementada en código. Lo único verificado es que la conexión con
-el proveedor de LLM (Z.ai / GLM) funciona, mediante
-`scripts/verificar_zai.py`. Las cinco funciones de solo lectura que define
-el MVP (`buscar_recomendaciones`, `detalle_recomendacion`,
-`explicar_criterio`, `comparar_proveedores`, `resumen_prioridad_ABC_XYZ`)
-están especificadas pero no implementadas. Esto no bloquea al resto del
-sistema: el motor y el evaluador no dependen del agente.
+Falta toda la capa de interacción. El sistema calcula, evalúa, persiste,
+carga datos desde CSV/Excel y responde preguntas en lenguaje natural
+mediante el agente conversacional, pero todavía no tiene interfaz gráfica:
+no hay forma de ver la cola de recomendaciones en pantalla. Por eso los
+criterios de aceptación 4, 5 y 8 de `MVP.md` §15 todavía no se cumplen.
 
 ### Frontend
 
