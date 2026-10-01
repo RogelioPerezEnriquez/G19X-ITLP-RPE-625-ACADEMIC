@@ -608,7 +608,52 @@ UUIDs.
 - Si hay nombres duplicados, la tool lanza `ValueError`.
 - Si en el futuro se necesita `producto_id`, se puede añadir como
   parámetro opcional.
-  
+
+## D-12: Cliente LLM crea el cliente Supabase internamente
+
+**Contexto**: La función `preguntar(pregunta, historial)` del agente no
+recibe un `supabase_client` como argumento. Sin embargo, las tools que
+invoca necesitan uno para consultar la base.
+
+**Alternativas consideradas**:
+- A) `preguntar` crea el cliente Supabase internamente (leyendo .env).
+- B) `preguntar` recibe `supabase_client` como argumento obligatorio.
+- C) `preguntar` recibe `supabase_client` opcional (crea si no viene).
+
+**Decisión**: **A** (creación interna con `SUPABASE_ANON_KEY`).
+
+**Justificación**:
+1. Mantiene la firma simple: `preguntar(pregunta, historial)`.
+2. Usa `SUPABASE_ANON_KEY` (solo lectura), coherente con la restricción
+   del agente.
+3. Creación perezosa: el cliente solo se crea si alguna tool se invoca.
+
+**Consecuencias**:
+- `preguntar` depende de .env (SUPABASE_URL, SUPABASE_ANON_KEY).
+- Si en el futuro se necesita pasar un cliente custom (por ejemplo, en
+  tests), se puede añadir un parámetro opcional.
+
+## D-13: Errores de tools se devuelven al LLM; errores de Supabase se propagan
+
+**Contexto**: Durante el bucle de function calling, una tool puede fallar
+por distintas razones: argumentos inválidos (ValueError/TypeError),
+errores de Supabase (red, 500), etc.
+
+**Decisión**: Los errores de validación de las tools (ValueError,
+TypeError, JSON inválido) se devuelven al LLM como parte del mensaje
+`tool` con un texto de error. El bucle de function calling continúa,
+dándole al LLM la oportunidad de corregir. Los errores de Supabase se
+propagan y detienen el bucle.
+
+**Justificación**:
+- Si una tool recibe un argumento inválido, el LLM puede corregirlo y
+  reintentar.
+- Si Supabase falla, no hay nada que el LLM pueda hacer.
+
+**Consecuencias**:
+- Los errores de Supabase no se enmascaran.
+- El LLM tiene más "libertad" para auto-corregirse.
+    
 ---
 
 ## Otras decisiones menores
