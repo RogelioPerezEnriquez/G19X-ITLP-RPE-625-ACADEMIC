@@ -78,6 +78,14 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
         modificar parámetros.
       - Resolver al implementar la pantalla de configuración (fase 6).
 
+- [ ] **Cumplir RF-12: sin registro público** (post-MVP, opcional)
+      - Actualmente el frontend tiene registro abierto (RegisterView).
+      - RF-12 pide "sin registro público de usuarios; las pantallas de
+        login sin opción de registro".
+      - Para cumplir: desactivar el registro en Supabase Auth y
+        eliminar RegisterView + el link en LoginView.
+      - Decisión documentada en DECISIONES_DISENO.md (D-14).      
+
 ## Resueltos
 
 - [x] **Agente conversacional (RF-09, RF-10)**
@@ -160,6 +168,18 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
 - [x] **Acoplamiento de unidades entre `eoq_rop.py` y `ahorro.py`**
       - `recomendador.py` pasa el mismo `periodos_por_año` a ambos módulos.
 
+- [x] **Autenticación con Supabase Auth (parcial)**
+      - Login con email/password.
+      - Registro (abierto, ver pendiente sobre RF-12).
+      - Logout.
+      - Store `auth` con `user`, `session`, `isAdmin`, `cargando`.
+      - Router guards con `meta.requiresAuth` y `meta.requiresAdmin`.
+      - NavBar con estado de sesión y badge "Administrador".
+      - Tabla `admins` creada con RLS y policies.
+      - Policy de UPDATE en `parametros_configuracion` para admins.
+      - Nota: falta la pantalla de configuración de parámetros (fase
+        6.7) para completar el criterio 8.
+        
 ## Notas de configurabilidad
 
 - **`config.py` es el único punto de entrada de parámetros.** Ningún módulo

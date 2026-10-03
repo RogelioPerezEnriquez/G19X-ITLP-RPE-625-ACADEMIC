@@ -654,6 +654,34 @@ propagan y detienen el bucle.
 - Los errores de Supabase no se enmascaran.
 - El LLM tiene más "libertad" para auto-corregirse.
     
+## D-14: Registro público abierto en el MVP (contradice RF-12)
+
+**Contexto**: El MVP.md (§6, RF-12) y el PRD (§6, §13) dicen "no hay
+registro público de usuarios en el MVP; las pantallas de login sin opción
+de registro". Sin embargo, durante el desarrollo se decidió implementar
+registro abierto.
+
+**Alternativas consideradas**:
+- A) Cumplir RF-12 literalmente: solo login, usuarios creados por admin.
+- B) Registro abierto: cualquiera puede registrarse.
+- C) Registro condicionado (por dominio, por invitación).
+
+**Decisión**: **B** (registro abierto).
+
+**Justificación**:
+1. Facilita las pruebas del sistema: el evaluador puede registrarse sin
+   depender de que un admin le cree un usuario.
+2. Es reversible: si se requiere cumplir RF-12, se puede desactivar el
+   registro en Supabase Auth (toggle) y eliminar la RegisterView.
+3. El MVP prioriza demostrar la capacidad central (recomendaciones),
+   no la gestión de usuarios.
+
+**Consecuencias**:
+- El sistema tiene una ruta `/register` visible.
+- Cualquiera con el link puede crear una cuenta.
+- Si en el futuro se quiere cumplir RF-12, se desactiva el registro en
+  Supabase Auth y se elimina RegisterView.
+      
 ---
 
 ## Otras decisiones menores
