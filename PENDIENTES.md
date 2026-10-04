@@ -180,6 +180,15 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
       - Nota: falta la pantalla de configuración de parámetros (fase
         6.7) para completar el criterio 8.
         
+- [x] **Cola de recomendaciones (criterio 4)**
+      - Vista `RecomendacionesView.vue` en `/recomendaciones`.
+      - Store `recomendaciones` con carga desde Supabase.
+      - Tarjetas con urgencia (badge de color), clase ABC/XYZ,
+        ahorro neto y cantidad recomendada.
+      - Filtro por urgencia (cliente, instantáneo).
+      - Click en tarjeta navega a `/recomendaciones/:productoId`
+        (placeholder, se completa en la fase 6.3).
+      - Formato de números en español (con `useGrouping: 'always'`).        
 ## Notas de configurabilidad
 
 - **`config.py` es el único punto de entrada de parámetros.** Ningún módulo

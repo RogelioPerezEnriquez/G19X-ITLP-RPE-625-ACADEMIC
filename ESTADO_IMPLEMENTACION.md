@@ -49,7 +49,7 @@ funcionales).
 | Evaluador (rúbrica de 6 criterios) | ✅ Completo | `backend/src/evaluador.py` (RF-06), 76 tests. Escribe en `evaluaciones_criterios`: 6 recomendaciones × 6 criterios = 36 evaluaciones por corrida completa. |
 | Configurabilidad | ✅ Completo | Los 10 parámetros de `parametros_configuracion` llegan a los módulos del motor como argumentos (RF-11), y se verificó end-to-end que cambiarlos altera los resultados. Otras constantes (pesos del score, periodos por año, margen de seguridad, `MIN_PERIODOS`, etiquetas de urgencia) siguen en código por decisión de alcance: ver `PENDIENTES.md`. |
 | Agente conversacional | ✅ Completo | RF-09 y RF-10. El paquete `backend/src/agente/` existe, pero solo contiene un `__init__.py` vacío. |
-| Frontend | ⏳ Pendiente | RF-07, RF-08 y RF-12. El directorio `frontend/` todavía no existe en el repositorio. |
+| Frontend | 🟡 Parcial | RF-07, RF-08 y RF-12, `MVP.md` §13. Setup, autenticación y cola de recomendaciones implementados. Faltan: panel de explicabilidad, vista de proveedores, chat, KPIs y configuración de parámetros. |
 | Script de ingesta | ✅ Completo | RF-01. `backend/src/ingesta/cargar_dataset.py` + CLI + CSVs de ejemplo en `data/raw/`. |
 
 ---
@@ -262,23 +262,27 @@ recomendador. El listado y el motivo están en `PENDIENTES.md`.
 
 ## Lo que falta
 
-Falta toda la capa de interacción. El sistema calcula, evalúa, persiste,
-carga datos desde CSV/Excel y responde preguntas en lenguaje natural
-mediante el agente conversacional, pero todavía no tiene interfaz gráfica:
-no hay forma de ver la cola de recomendaciones en pantalla. Por eso los
-criterios de aceptación 4, 5 y 8 de `MVP.md` §15 todavía no se cumplen.
+Falta completar el frontend. El sistema calcula, evalúa, persiste, carga
+datos desde CSV/Excel, responde preguntas en lenguaje natural y muestra
+la cola de recomendaciones en pantalla. Todavía falta el panel de
+explicabilidad y la pantalla de configuración de parámetros. Por eso los
+criterios de aceptación 5 y 8 de `MVP.md` §15 todavía no se cumplen.
 
-### Frontend
+### Frontend (parcial)
 
-Pendiente (RF-07, RF-08 y RF-12, `MVP.md` §13). No existe el directorio
-`frontend/`: no hay proyecto Vue 3, ni cola de recomendaciones, ni panel de
-explicabilidad, ni vista de proveedores, ni chat, ni panel de KPIs, ni
-pantalla de inicio de sesión con Supabase Auth. El backend ya deja los datos
-listos para esa capa: `recomendaciones` y `evaluaciones_criterios` se pueden
-leer con la `anon key` gracias a las políticas de solo lectura, y el `check`
-de la tabla limita los criterios a los 6 previstos. Queda un pendiente de
-diseño menor para esa fase: la tabla no guarda el orden lógico de los
-criterios (ver `PENDIENTES.md`).
+El directorio `frontend/` existe con:
+- Setup: Vite + Vue 3 + Tailwind + Pinia + Vue Router.
+- Autenticación: login, registro, logout, gestión de sesión, roles
+  (tabla `admins`), router guards.
+- Cola de recomendaciones: vista `/recomendaciones` con filtro por
+  urgencia.
+
+Falta:
+- Panel de explicabilidad (`/recomendaciones/:productoId`).
+- Vista de proveedores.
+- Chat con el agente.
+- Panel de KPIs.
+- Pantalla de configuración de parámetros (con RLS para admins).
 ---
 
 ## Cómo verificar el estado actual
