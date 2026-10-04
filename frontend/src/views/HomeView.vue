@@ -1,4 +1,5 @@
 <script setup>
+import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
@@ -22,5 +23,12 @@ const authStore = useAuthStore()
       Sistema en construcción. Las vistas se agregarán en las
       próximas fases.
     </p>
+
+    <RouterLink
+      to="/recomendaciones"
+      class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+    >
+      Ver recomendaciones
+    </RouterLink>
   </div>
 </template>
