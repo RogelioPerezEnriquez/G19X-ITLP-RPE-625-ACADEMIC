@@ -188,7 +188,17 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
       - Filtro por urgencia (cliente, instantáneo).
       - Click en tarjeta navega a `/recomendaciones/:productoId`
         (placeholder, se completa en la fase 6.3).
-      - Formato de números en español (con `useGrouping: 'always'`).        
+      - Formato de números en español (con `useGrouping: 'always'`). 
+
+- [x] **Panel de explicabilidad (criterio 5)**
+      - Vista `RecomendacionDetalleView.vue` en
+        `/recomendaciones/:productoId`.
+      - 6 tarjetas de criterios con estado, valor y descripción.
+      - Formato español de números.
+      - Componente `CriterioCard.vue` reutilizable.
+      - Constante `CRITERIOS_ORDENADOS` en
+        `constants/criterios.js` con el orden del MVP.
+                     
 ## Notas de configurabilidad
 
 - **`config.py` es el único punto de entrada de parámetros.** Ningún módulo

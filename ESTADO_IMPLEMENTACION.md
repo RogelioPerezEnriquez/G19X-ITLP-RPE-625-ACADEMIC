@@ -49,7 +49,7 @@ funcionales).
 | Evaluador (rúbrica de 6 criterios) | ✅ Completo | `backend/src/evaluador.py` (RF-06), 76 tests. Escribe en `evaluaciones_criterios`: 6 recomendaciones × 6 criterios = 36 evaluaciones por corrida completa. |
 | Configurabilidad | ✅ Completo | Los 10 parámetros de `parametros_configuracion` llegan a los módulos del motor como argumentos (RF-11), y se verificó end-to-end que cambiarlos altera los resultados. Otras constantes (pesos del score, periodos por año, margen de seguridad, `MIN_PERIODOS`, etiquetas de urgencia) siguen en código por decisión de alcance: ver `PENDIENTES.md`. |
 | Agente conversacional | ✅ Completo | RF-09 y RF-10. El paquete `backend/src/agente/` existe, pero solo contiene un `__init__.py` vacío. |
-| Frontend | 🟡 Parcial | RF-07, RF-08 y RF-12, `MVP.md` §13. Setup, autenticación y cola de recomendaciones implementados. Faltan: panel de explicabilidad, vista de proveedores, chat, KPIs y configuración de parámetros. |
+| Frontend | 🟡 Parcial | RF-07, RF-08 y RF-12, `MVP.md` §13. Setup, autenticación, cola de recomendaciones y panel de explicabilidad implementados. Faltan: vista de proveedores, chat, KPIs y configuración de parámetros. |
 | Script de ingesta | ✅ Completo | RF-01. `backend/src/ingesta/cargar_dataset.py` + CLI + CSVs de ejemplo en `data/raw/`. |
 
 ---
@@ -263,10 +263,10 @@ recomendador. El listado y el motivo están en `PENDIENTES.md`.
 ## Lo que falta
 
 Falta completar el frontend. El sistema calcula, evalúa, persiste, carga
-datos desde CSV/Excel, responde preguntas en lenguaje natural y muestra
-la cola de recomendaciones en pantalla. Todavía falta el panel de
-explicabilidad y la pantalla de configuración de parámetros. Por eso los
-criterios de aceptación 5 y 8 de `MVP.md` §15 todavía no se cumplen.
+datos desde CSV/Excel, responde preguntas en lenguaje natural, muestra
+la cola de recomendaciones y el panel de explicabilidad. Todavía falta
+la pantalla de configuración de parámetros. Por eso el criterio de
+aceptación 8 de `MVP.md` §15 todavía no se cumple.
 
 ### Frontend (parcial)
 
@@ -276,13 +276,15 @@ El directorio `frontend/` existe con:
   (tabla `admins`), router guards.
 - Cola de recomendaciones: vista `/recomendaciones` con filtro por
   urgencia.
+- Panel de explicabilidad: vista `/recomendaciones/:id` con los 6
+  criterios evaluados.
 
 Falta:
-- Panel de explicabilidad (`/recomendaciones/:productoId`).
 - Vista de proveedores.
 - Chat con el agente.
 - Panel de KPIs.
 - Pantalla de configuración de parámetros (con RLS para admins).
+
 ---
 
 ## Cómo verificar el estado actual
