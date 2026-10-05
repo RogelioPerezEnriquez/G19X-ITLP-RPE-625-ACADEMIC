@@ -26,7 +26,7 @@ insert into proveedores (nombre, cumplimiento_entrega_pct, tasa_defectos_pct) va
     ('SEED_ProvCo',       95, 2),   -- score 96.2 → Confiable
     ('SEED_FastParts',    82, 8),   -- score 86.0 → Confiable
     ('SEED_CheapSupply',  70, 15),  -- score 76.0 → Aceptable con reservas
-    ('SEED_RiesgoTotal',  50, 25);  -- score 50.0 → Riesgoso
+    ('SEED_RiesgoTotal',  50, 25);  -- score 60.0 → Aceptable con reservas
 
 -- ------------------------------------------------------------
 -- PRODUCTOS
