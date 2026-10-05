@@ -198,7 +198,14 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
       - Componente `CriterioCard.vue` reutilizable.
       - Constante `CRITERIOS_ORDENADOS` en
         `constants/criterios.js` con el orden del MVP.
-                     
+
+- [x] **Vista de proveedores**
+      - Vista `ProveedoresView.vue` en `/proveedores`.
+      - Store `proveedores` con cálculo de score y estado en el frontend.
+      - Componentes `ProveedorCard.vue`, `ScoreBadge.vue`,
+        `BarraProgreso.vue`.
+      - Coherencia de tolerancia (1e-9) con el backend.        
+
 ## Notas de configurabilidad
 
 - **`config.py` es el único punto de entrada de parámetros.** Ningún módulo

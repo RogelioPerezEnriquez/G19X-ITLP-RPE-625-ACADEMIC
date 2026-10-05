@@ -49,7 +49,7 @@ funcionales).
 | Evaluador (rúbrica de 6 criterios) | ✅ Completo | `backend/src/evaluador.py` (RF-06), 76 tests. Escribe en `evaluaciones_criterios`: 6 recomendaciones × 6 criterios = 36 evaluaciones por corrida completa. |
 | Configurabilidad | ✅ Completo | Los 10 parámetros de `parametros_configuracion` llegan a los módulos del motor como argumentos (RF-11), y se verificó end-to-end que cambiarlos altera los resultados. Otras constantes (pesos del score, periodos por año, margen de seguridad, `MIN_PERIODOS`, etiquetas de urgencia) siguen en código por decisión de alcance: ver `PENDIENTES.md`. |
 | Agente conversacional | ✅ Completo | RF-09 y RF-10. El paquete `backend/src/agente/` existe, pero solo contiene un `__init__.py` vacío. |
-| Frontend | 🟡 Parcial | RF-07, RF-08 y RF-12, `MVP.md` §13. Setup, autenticación, cola de recomendaciones y panel de explicabilidad implementados. Faltan: vista de proveedores, chat, KPIs y configuración de parámetros. |
+| Frontend | 🟡 Parcial | ... Faltan: chat, KPIs y configuración de parámetros. |
 | Script de ingesta | ✅ Completo | RF-01. `backend/src/ingesta/cargar_dataset.py` + CLI + CSVs de ejemplo en `data/raw/`. |
 
 ---
