@@ -26,6 +26,9 @@ async function cerrarSesion() {
           <RouterLink to="/recomendaciones" class="text-gray-600 hover:text-gray-900">
             Recomendaciones
           </RouterLink>
+          <RouterLink to="/proveedores" class="text-gray-600 hover:text-gray-900">
+            Proveedores
+          </RouterLink>
         </nav>
       </div>
 
