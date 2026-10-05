@@ -15,6 +15,16 @@ const props = defineProps({
     type: Number,
     default: null,
   },
+  // Sólo se usan en el criterio categórico "importancia_producto", que no
+  // tiene valor numérico: en su lugar se muestra la combinación ABC × XYZ.
+  claseAbc: {
+    type: String,
+    default: null,
+  },
+  claseXyz: {
+    type: String,
+    default: null,
+  },
 })
 
 // Si llega un criterio desconocido, se muestra su key como título en lugar de
@@ -85,6 +95,14 @@ const formateadorNumero = new Intl.NumberFormat('es-ES', {
 })
 
 const valorFormateado = computed(() => {
+  // "Importancia del producto" es un criterio categórico puro (su
+  // `valor_numerico` es null): se muestra la combinación de clases.
+  if (props.criterio === 'importancia_producto') {
+    return props.claseAbc && props.claseXyz
+      ? `${props.claseAbc} × ${props.claseXyz}`
+      : '—'
+  }
+
   if (props.valorNumerico === null || props.valorNumerico === undefined) {
     return '—'
   }

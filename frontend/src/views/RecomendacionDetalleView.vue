@@ -171,6 +171,8 @@ function volver() {
           :criterio="criterio.key"
           :estado="criterio.estado"
           :valor-numerico="criterio.valorNumerico"
+          :clase-abc="detalle.clase_abc"
+          :clase-xyz="detalle.clase_xyz"
         />
       </div>
 
