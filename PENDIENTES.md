@@ -84,7 +84,16 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
         login sin opción de registro".
       - Para cumplir: desactivar el registro en Supabase Auth y
         eliminar RegisterView + el link en LoginView.
-      - Decisión documentada en DECISIONES_DISENO.md (D-14).      
+      - Decisión documentada en DECISIONES_DISENO.md (D-14). 
+
+- [ ] **Ajustar el seed para cubrir el estado "Riesgoso"** (opcional)
+      - `SEED_RiesgoTotal` tiene valores `(50, 25)` que dan score 60.0
+        → "Aceptable con reservas".
+      - Para que sea "Riesgoso" (score < 60), ajustar a:
+        - `(40, 30)`: score 52.0 → Riesgoso.
+        - `(45, 25)`: score 57.0 → Riesgoso.
+      - Requiere recargar el seed + re-ejecutar el pipeline.
+      - Hacer al final, si se quiere una demo con los 3 estados.           
 
 ## Resueltos
 
