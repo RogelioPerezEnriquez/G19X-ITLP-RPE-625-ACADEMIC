@@ -67,9 +67,42 @@ function mensajeDeError(error) {
   return mensaje
 }
 
+// SELECT único del panel de explicabilidad: la recomendación con su producto,
+// su proveedor y sus evaluaciones de criterios embebidas. `productos` va con
+// `!inner` porque, sin él, PostgREST no filtra las filas padre por columnas
+// del recurso embebido: devolvería todas las recomendaciones (con
+// `productos: null` en las que no coinciden) y `limit(1)` traería la más
+// reciente de cualquier producto.
+const SELECT_DETALLE = `
+  *,
+  productos!inner(nombre, categoria, stock_actual),
+  proveedores(nombre, cumplimiento_entrega_pct, tasa_defectos_pct),
+  evaluaciones_criterios(criterio, estado, valor_numerico)
+`
+
+// La ruta `/recomendaciones/:productoId` puede llevar el nombre del producto o
+// su UUID (la tarjeta de la cola navega con `producto_id`). Este patrón
+// permite elegir por cuál columna filtrar.
+const PATRON_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Normaliza la fila cruda: los embeds N:1 llegan como objeto (o arreglo ante
+// una respuesta inesperada) y las evaluaciones siempre como arreglo.
+function normalizarDetalle(fila) {
+  return {
+    ...fila,
+    producto: primerElemento(fila.productos),
+    proveedor: primerElemento(fila.proveedores),
+    evaluaciones: Array.isArray(fila.evaluaciones_criterios)
+      ? fila.evaluaciones_criterios
+      : [],
+  }
+}
+
 export const useRecomendacionesStore = defineStore('recomendaciones', {
   state: () => ({
     items: [],
+    detalleActual: null,
     cargando: false,
     error: null,
   }),
@@ -109,6 +142,61 @@ export const useRecomendacionesStore = defineStore('recomendaciones', {
         this.error = mensajeDeError(error)
         this.items = []
         return []
+      } finally {
+        this.cargando = false
+      }
+    },
+
+    /**
+     * Trae la recomendación más reciente de un producto con su producto, su
+     * proveedor y sus evaluaciones de criterios en UN solo SELECT anidado.
+     *
+     * `productoId` es el parámetro de la ruta: puede ser el nombre del
+     * producto o su UUID (la tarjeta de la cola navega con `producto_id`), y
+     * se elige la columna de filtro según el formato del valor.
+     *
+     * Devuelve el objeto completo normalizado o `null` si no existe (también
+     * ante error, caso en el que `error` queda con el mensaje). El resultado
+     * queda además en `detalleActual` para reutilizarlo.
+     */
+    async detalle(productoId) {
+      this.cargando = true
+      this.error = null
+      this.detalleActual = null
+
+      const columnaFiltro = PATRON_UUID.test(String(productoId))
+        ? 'producto_id'
+        : 'productos.nombre'
+
+      try {
+        let { data, error } = await supabase
+          .from('recomendaciones')
+          .select(SELECT_DETALLE)
+          .eq(columnaFiltro, productoId)
+          .order('fecha_generacion', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (error) {
+          // Respaldo: si `maybeSingle()` falla, se reintenta con `limit(1)`
+          // y se toma la primera fila.
+          const respaldo = await supabase
+            .from('recomendaciones')
+            .select(SELECT_DETALLE)
+            .eq(columnaFiltro, productoId)
+            .order('fecha_generacion', { ascending: false })
+            .limit(1)
+
+          if (respaldo.error) throw respaldo.error
+          data = respaldo.data?.[0] ?? null
+        }
+
+        this.detalleActual = data ? normalizarDetalle(data) : null
+        return this.detalleActual
+      } catch (error) {
+        this.error = mensajeDeError(error)
+        this.detalleActual = null
+        return null
       } finally {
         this.cargando = false
       }
