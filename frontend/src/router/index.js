@@ -5,6 +5,7 @@ import RegisterView from '../views/RegisterView.vue'
 import RecomendacionesView from '../views/RecomendacionesView.vue'
 import RecomendacionDetalleView from '../views/RecomendacionDetalleView.vue'
 import ProveedoresView from '../views/ProveedoresView.vue'
+import ChatView from '../views/ChatView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const router = createRouter({
@@ -26,6 +27,12 @@ const router = createRouter({
       path: '/proveedores',
       name: 'proveedores',
       component: ProveedoresView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/chat',
+      name: 'chat',
+      component: ChatView,
       meta: { requiresAuth: true },
     },
     {
