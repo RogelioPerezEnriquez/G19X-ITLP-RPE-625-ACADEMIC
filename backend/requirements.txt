@@ -4,3 +4,7 @@ openai>=1.0.0
 pandas>=2.0.0
 numpy>=1.26.0
 pytest>=8.0.0
+
+# === API HTTP del agente ===
+fastapi>=0.115.0
+uvicorn>=0.32.0
