@@ -213,7 +213,17 @@ Para decisiones de diseño, ver `DECISIONES_DISENO.md`.
       - Store `proveedores` con cálculo de score y estado en el frontend.
       - Componentes `ProveedorCard.vue`, `ScoreBadge.vue`,
         `BarraProgreso.vue`.
-      - Coherencia de tolerancia (1e-9) con el backend.        
+      - Coherencia de tolerancia (1e-9) con el backend.     
+
+- [x] **Chat con el agente conversacional**
+      - Store `chat` con manejo de mensajes e historial.
+      - Vista `/chat` con burbujas de usuario y asistente.
+      - Renderizado de Markdown en las respuestas del asistente
+        (librerías `marked` + `dompurify`).
+      - Botones de sugerencia, indicador "escribiendo...", auto-scroll.
+      - API FastAPI que expone el agente (`backend/src/agente/api.py`).
+      - Script para levantar el servidor (`scripts/run_api.py`).
+      - Prompt del sistema usa pesos mexicanos (`$`).         
 
 ## Notas de configurabilidad
 
