@@ -60,21 +60,26 @@ funciona con cualquier dataset que respete el esquema de `db/schema.sql`.
 │   │   ├── motor/         Motor OR (6 módulos puros)
 │   │   ├── config.py      Carga de parámetros de configuración
 │   │   ├── recomendador.py Orquestador del motor
-│   │   └── evaluador.py   Rúbrica de 6 criterios
+│   │   ├── evaluador.py   Rúbrica de 6 criterios
+│   │   └── agente/        Agente conversacional + API FastAPI
 │   ├── tests/             Suite de tests (pytest)
 │   └── requirements.txt
+├── frontend/              Interfaz de usuario (Vue 3)
 ├── scripts/               Scripts de verificación y demo
-│   ├── verificar_*.py     Verificación de entorno (RLS, service_role, LLM)
-│   ├── demo_recomendador.py
-│   └── demo_flujo_completo.py
-├── frontend/              Interfaz de usuario (Vue 3) [pendiente]
-├── MVP.md                 Definición del producto mínimo viable
-├── PRD_*.md               Documento de requisitos
-├── ESTADO_IMPLEMENTACION.md  Estado actual de la implementación
-├── DECISIONES_DISENO.md      Decisiones de diseño del proyecto
-├── PENDIENTES.md          Deuda técnica
-└── VERIFICACION.md           Guía de verificación del sistema
+│   ├── verificar_*.py     Verificación de entorno
+│   ├── demo_*.py          Demos del motor
+│   └── run_api.py         Levantar la API del agente
+├── data/                  Datos de entrada (CSVs de ejemplo)
+├── docs/                  Documentación del proyecto
+│   ├── estado-implementacion.md
+│   ├── decisiones-diseno.md
+│   ├── verificacion.md
+│   └── pendientes.md
+└── README.md
 ```
+
+**Nota**: el PRD y el MVP no están incluidos en el repositorio; se
+distribuyen en la plataforma.
 
 ---
 
@@ -166,7 +171,7 @@ python -m pytest -q
 
 Todos los tests deben pasar.
 
-Ver `VERIFICACION.md` para la guía completa de verificación.
+Ver `docs/verificacion.md` para la guía completa de verificación.
 
 ---
 
@@ -230,8 +235,8 @@ Agente conversacional (solo lectura) [pendiente]
 Interfaz (cola + explicabilidad + chat + KPIs) [pendiente]
 ```
 
-Ver `MVP.md` para detalle de cada componente, `PENDIENTES.md` para deuda
-técnica y `DECISIONES_DISENO.md` para decisiones de diseño.
+Ver `docs/mvp.md` para detalle de cada componente, `docs/pendientes.md` para deuda
+técnica y `docs/decisiones-diseno.md` para decisiones de diseño.
 
 ---
 
