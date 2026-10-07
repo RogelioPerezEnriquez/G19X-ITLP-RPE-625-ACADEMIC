@@ -225,6 +225,15 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Script para levantar el servidor (`scripts/run_api.py`).
       - Prompt del sistema usa pesos mexicanos (`$`).         
 
+- [x] **Panel de KPIs**
+      - Vista `KpisView.vue` en `/kpis`.
+      - 7 métricas: total de recomendaciones, ahorro neto, con ahorro
+        detectado, productos únicos, urgencias, distribución ABC,
+        distribución XYZ, grid ABC×XYZ.
+      - Componentes `KpiCard.vue`, `DistribucionBarra.vue`,
+        `GridABCXYZ.vue`.
+      - Cálculo en el frontend (sin librería de gráficos).
+      
 ## Notas de configurabilidad
 
 - **`config.py` es el único punto de entrada de parámetros.** Ningún módulo
