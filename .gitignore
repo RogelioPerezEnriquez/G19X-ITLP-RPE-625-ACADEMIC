@@ -116,3 +116,7 @@ temp/
 # ------------------------------------------------------------
 supabase/.branches/
 supabase/.temp/
+
+# Documentos que NO van al repositorio (plataforma aparte)
+docs/prd.md
+docs/mvp.md
