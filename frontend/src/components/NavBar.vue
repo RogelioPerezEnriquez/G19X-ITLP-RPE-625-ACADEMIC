@@ -35,6 +35,13 @@ async function cerrarSesion() {
           <RouterLink to="/chat" class="text-gray-600 hover:text-gray-900">
             Chat
           </RouterLink>
+          <RouterLink
+            v-if="authStore.isAdmin"
+            to="/configuracion"
+            class="text-gray-600 hover:text-gray-900"
+          >
+            Configuración
+          </RouterLink>
         </nav>
       </div>
 

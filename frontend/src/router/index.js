@@ -7,6 +7,7 @@ import RecomendacionDetalleView from '../views/RecomendacionDetalleView.vue'
 import ProveedoresView from '../views/ProveedoresView.vue'
 import ChatView from '../views/ChatView.vue'
 import KpisView from '../views/KpisView.vue'
+import ConfiguracionView from '../views/ConfiguracionView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const router = createRouter({
@@ -41,6 +42,12 @@ const router = createRouter({
       name: 'kpis',
       component: KpisView,
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/configuracion',
+      name: 'configuracion',
+      component: ConfiguracionView,
+      meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
       path: '/recomendaciones/:productoId',
