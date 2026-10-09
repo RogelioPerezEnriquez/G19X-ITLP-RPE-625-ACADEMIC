@@ -72,12 +72,6 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Solución a futuro: añadir un campo `activa` (boolean) y filtrar
         por él, o añadir un constraint único por (producto_id, activa).
 
-- [ ] **Policy de UPDATE para `parametros_configuracion`** (fase frontend)
-      - Actualmente solo tiene policy de SELECT para anon/authenticated.
-      - El criterio de aceptación 8 requiere que solo admins puedan
-        modificar parámetros.
-      - Resolver al implementar la pantalla de configuración (fase 6).
-
 - [ ] **Cumplir RF-12: sin registro público** (post-MVP, opcional)
       - Actualmente el frontend tiene registro abierto (RegisterView).
       - RF-12 pide "sin registro público de usuarios; las pantallas de
@@ -186,8 +180,6 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - NavBar con estado de sesión y badge "Administrador".
       - Tabla `admins` creada con RLS y policies.
       - Policy de UPDATE en `parametros_configuracion` para admins.
-      - Nota: falta la pantalla de configuración de parámetros (fase
-        6.7) para completar el criterio 8.
         
 - [x] **Cola de recomendaciones (criterio 4)**
       - Vista `RecomendacionesView.vue` en `/recomendaciones`.
@@ -233,6 +225,18 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Componentes `KpiCard.vue`, `DistribucionBarra.vue`,
         `GridABCXYZ.vue`.
       - Cálculo en el frontend (sin librería de gráficos).
+
+- [x] **Configuración de parámetros (criterio 8)**
+      - Vista `ConfiguracionView.vue` en `/configuracion`.
+      - Store `configuracion` con carga y actualización de los 10
+        parámetros.
+      - Ruta protegida con `meta.requiresAdmin`: solo admins pueden
+        acceder.
+      - Link en el NavBar visible solo para admins.
+      - RLS: la policy `solo_admins_actualizan_parametros` restringe el
+        UPDATE a admins.
+      - Script `db/restaurar_parametros.sql` para restaurar los valores
+        por defecto.      
       
 ## Notas de configurabilidad
 

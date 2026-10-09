@@ -1,7 +1,8 @@
 # Estado de implementación
 
-**Fecha del documento:** 30 de septiembre de 2026
-**Commit de referencia:** `8fb1d7a` (rama `master`)
+**Fecha de última actualización:** 8 de octubre de 2026
+**Commit de referencia:** <7d7f942>
+**Rama:** `main`
 **Proyecto:** Sistema Inteligente de Optimización de Compras
 
 Este documento es una **foto del estado actual** de la implementación: qué
@@ -19,17 +20,30 @@ indicado.
 
 ## Resumen ejecutivo
 
-El MVP tiene implementada y verificada toda la capa de cálculo y de
-persistencia: esquema de base de datos en Supabase (7 tablas, RLS y 10
-parámetros configurables), seed sintético de prueba, motor de investigación de
-operaciones completo (6 módulos puros: ABC, XYZ, demanda, EOQ/ROP, proveedor y
-ahorro), recomendador que orquesta ese motor y evaluador que aplica la rúbrica
-de 6 criterios, con 403 tests pasando y una corrida end-to-end exitosa contra
-los datos reales del seed. Falta la capa de interacción: el script de ingesta
-CSV/Excel (RF-01), el agente conversacional (RF-09, RF-10) y el frontend Vue 3
-(RF-07, RF-08, RF-12). En consecuencia, el sistema hoy se opera desde scripts y
-terminal, y los criterios de aceptación del MVP ligados a la interfaz y al
-agente (puntos 1, 4, 5, 6 y 8 de `docs/mvp.md` §15) todavía no se pueden cumplir.
+El MVP está funcionalmente completo. El sistema tiene implementadas y
+verificadas todas las capas:
+
+- **Capa de cálculo**: motor de investigación de operaciones completo (6
+  módulos puros: ABC, XYZ, demanda, EOQ/ROP, proveedor y ahorro),
+  recomendador que orquesta el motor y evaluador que aplica la rúbrica
+  de 6 criterios.
+- **Capa de persistencia**: esquema de base de datos en Supabase (7
+  tablas, RLS y 10 parámetros configurables), seed sintético de prueba
+  y script de ingesta CSV/Excel.
+- **Capa de configurabilidad**: los 10 parámetros de
+  `parametros_configuracion` se leen desde Supabase y se propagan al
+  motor; se verificó end-to-end que cambiarlos altera los resultados.
+- **Capa de interacción**: agente conversacional con function calling
+  (5 tools de solo lectura, cliente LLM, API FastAPI) y frontend Vue 3
+  con 6 vistas (recomendaciones, explicabilidad, proveedores, chat,
+  KPIs y configuración de parámetros).
+
+La suite de tests tiene 445 tests pasando, y se realizaron corridas
+end-to-end exitosas contra los datos reales del seed.
+
+Los 8 criterios de aceptación de `docs/mvp.md` §15 se cumplen.
+Queda pendiente únicamente la **verificación end-to-end con la interfaz
+gráfica** (fase de integración final).
 
 ---
 
@@ -43,13 +57,13 @@ funcionales).
 | Esquema de base de datos | ✅ Completo | `db/schema.sql` (versión 2): 7 tablas, claves foráneas, restricciones `check` de dominio, índices de apoyo, RLS habilitado en las 7 tablas e inserción de los 10 parámetros de configuración. |
 | Datos sintéticos | ✅ Completo | `db/seed_sintetico.sql`: 6 productos, 4 proveedores, 8 relaciones producto-proveedor y 72 registros de demanda (12 periodos por producto). |
 | Verificación de seguridad (RLS) | ✅ Completo | `scripts/verificar_rls.py` y `scripts/verificar_service_role.py`: `anon` solo lectura, `service_role` con escritura. Todo el backend escribe con `service_role`. |
-| Conexión con LLM | ✅ Completo | `scripts/verificar_zai.py` valida la configuración y la conectividad con el proveedor (Z.ai / GLM) a partir de las variables de `.env`. Es verificación de conectividad: todavía no existe agente que consuma la API. |
-| Motor OR | ✅ Completo | 6 módulos puros en `backend/src/motor/` (RF-02, RF-03, RF-04) con 254 de los 403 tests. Ningún módulo accede a red, base de datos ni archivos. |
+| Conexión con LLM | ✅ Completo | `scripts/verificar_zai.py` valida la configuración y la conectividad con el proveedor (Z.ai / GLM). El agente (`backend/src/agente/`) consume la API a través de function calling. |
+| Motor OR | ✅ Completo | 6 módulos puros en `backend/src/motor/` (RF-02, RF-03, RF-04) con 255 de los 445 tests. Ningún módulo accede a red, base de datos ni archivos. |
 | Recomendador | ✅ Completo | `backend/src/recomendador.py` orquesta el motor (RF-05) y persiste en `recomendaciones`. Verificado contra el seed: 6 recomendaciones generadas. |
 | Evaluador (rúbrica de 6 criterios) | ✅ Completo | `backend/src/evaluador.py` (RF-06), 76 tests. Escribe en `evaluaciones_criterios`: 6 recomendaciones × 6 criterios = 36 evaluaciones por corrida completa. |
 | Configurabilidad | ✅ Completo | Los 10 parámetros de `parametros_configuracion` llegan a los módulos del motor como argumentos (RF-11), y se verificó end-to-end que cambiarlos altera los resultados. Otras constantes (pesos del score, periodos por año, margen de seguridad, `MIN_PERIODOS`, etiquetas de urgencia) siguen en código por decisión de alcance: ver `docs/pendientes.md`. |
-| Agente conversacional | ✅ Completo | RF-09 y RF-10. El paquete `backend/src/agente/` existe, pero solo contiene un `__init__.py` vacío. |
-| Frontend | 🟡 Parcial | ... Faltan: configuración de parámetros. |
+| Agente conversacional | ✅ Completo | RF-09 y RF-10. 5 tools de solo lectura, cliente LLM con function calling, esquema de tools y API FastAPI que expone el agente al frontend. |
+| Frontend | ✅ Completo | RF-07, RF-08 y RF-12, `docs/mvp.md` §13. Setup, autenticación, cola de recomendaciones, panel de explicabilidad, vista de proveedores, chat con el agente, panel de KPIs y configuración de parámetros implementados. |
 | Script de ingesta | ✅ Completo | RF-01. `backend/src/ingesta/cargar_dataset.py` + CLI + CSVs de ejemplo en `data/raw/`. |
 
 ---
@@ -57,13 +71,13 @@ funcionales).
 ## Métricas del proyecto
 
 - Módulos del motor: 6
-- Archivos de test: 9 (todos en `backend/tests/`)
-- Tests pasando: 403 (0 fallos, ~5,5 s)
+- Archivos de test: 11 (todos en `backend/tests/`)
+- Tests pasando: 445 (0 fallos)
 - Parámetros configurables: 10 (tabla `parametros_configuracion`)
 - Tablas en la base de datos: 7
-- Scripts de demo/verificación: 5 (`scripts/`)
-- Módulos de producción con entrada/salida: 3 (`config.py`, `recomendador.py`, `evaluador.py`)
-- Paquetes placeholder vacíos: 2 (`backend/src/agente/`, `backend/src/ingesta/`)
+- Scripts en `scripts/`: 7 (verificación de entorno, demos y API del agente)
+- Paquetes del backend: 5 (`motor/`, `agente/`, `ingesta/`, `config.py`, `recomendador.py`, `evaluador.py`)
+- Vistas del frontend: 6 (recomendaciones, explicabilidad, proveedores, chat, KPIs, configuración)
 - Filas del seed: 6 productos, 4 proveedores, 8 relaciones producto-proveedor, 72 registros de demanda
 - Recomendaciones generadas contra el seed: 6
 - Evaluaciones por corrida completa (6 recomendaciones × 6 criterios): 36
@@ -180,9 +194,20 @@ proveedor elegido como los cálculos del motor y el snapshot necesario para
 trazabilidad (`lead_time_dias`, `precio_unitario`). El detalle completo del
 algoritmo y de los casos borde está en el docstring del módulo.
 
-Cómo se usa hoy: `python scripts/demo_recomendador.py` (reporte de
-recomendaciones) y `python scripts/demo_flujo_completo.py` (reporte completo más
-evaluación).
+Cómo se usa hoy:
+
+- **Interfaz web** (principal): el frontend Vue 3 expone las vistas de
+  recomendaciones, explicabilidad, proveedores, chat y KPIs, más la
+  pantalla de configuración para admins. Se levanta con
+  `cd frontend && npm run dev`.
+- **API del agente**: el backend FastAPI expone el agente al frontend.
+  Se levanta con `python scripts/run_api.py`.
+- **Scripts de demo**:
+  * `python scripts/demo_recomendador.py` — reporte de recomendaciones.
+  * `python scripts/demo_flujo_completo.py` — reporte completo con
+    evaluación.
+- **Ingesta de datos**: `python backend/src/ingesta/__main__.py` carga
+  los CSVs de `data/raw/` en Supabase.
 
 ### Evaluador
 
@@ -262,42 +287,41 @@ recomendador. El listado y el motivo están en `docs/pendientes.md`.
 
 ## Lo que falta
 
-Falta completar el frontend. El sistema calcula, evalúa, persiste, carga
-datos desde CSV/Excel, responde preguntas en lenguaje natural, muestra
-la cola de recomendaciones y el panel de explicabilidad. Todavía falta
-la pantalla de configuración de parámetros. Por eso el criterio de
-aceptación 8 de `docs/mvp.md` §15 todavía no se cumple.
+El MVP está funcionalmente completo. Todos los componentes del alcance
+están implementados y los 8 criterios de aceptación de `docs/mvp.md` §15
+se cumplen.
 
-### Frontend (parcial)
+Queda pendiente únicamente la **verificación end-to-end** con la
+interfaz gráfica (fase de integración final): recorrer el flujo completo
+desde la ingesta de datos hasta la consulta al agente, y documentar los
+resultados.
 
-El directorio `frontend/` existe con:
-- Setup: Vite + Vue 3 + Tailwind + Pinia + Vue Router.
-- Autenticación: login, registro, logout, gestión de sesión, roles
-  (tabla `admins`), router guards.
-- Cola de recomendaciones: vista `/recomendaciones` con filtro por
-  urgencia.
-- Panel de explicabilidad: vista `/recomendaciones/:id` con los 6
-  criterios evaluados.
+### Verificación pendiente
 
-Falta:
-- Vista de proveedores.
-- Chat con el agente.
-- Panel de KPIs.
-- Pantalla de configuración de parámetros (con RLS para admins).
+- Recorrido end-to-end con la UI:
+  * Cargar el dataset (o usar el seed ya cargado).
+  * Generar recomendaciones y evaluaciones.
+  * Ver la cola priorizada en el frontend.
+  * Abrir el panel de explicabilidad.
+  * Consultar al agente desde el chat.
+  * Modificar un parámetro desde la pantalla de configuración.
+- Ajustes finales que surjan de esa verificación.
 
 ---
 
 ## Cómo verificar el estado actual
 
-Los comandos suponen partir de la raíz del repositorio y tener Python 3.11+.
+Los comandos suponen partir de la raíz del repositorio y tener Python 3.11+
+y Node.js 18+.
 
-**1. Instalar dependencias:**
+**1. Instalar dependencias del backend:**
 
 ```bash
 cd backend && pip install -r requirements.txt
 ```
 
-Instala `supabase`, `python-dotenv`, `openai`, `pandas`, `numpy` y `pytest`.
+Instala `supabase`, `python-dotenv`, `openai`, `pandas`, `numpy`, `pytest`,
+`fastapi` y `uvicorn`.
 
 **2. Correr los tests** (no requiere Supabase ni `.env`):
 
@@ -306,26 +330,28 @@ cd backend
 python -m pytest -q
 ```
 
-Esperado: `403 passed`, en unos 5 segundos.
+Esperado: `445 passed`, en unos 5-10 segundos.
 
-**3. Correr el script de demo** (requiere `.env` configurado con `SUPABASE_URL` y
-`SUPABASE_SERVICE_ROLE_KEY`, y el seed ya cargado en Supabase):
+**3. Correr el script de demo** (requiere `.env` configurado con
+`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`, y el seed ya cargado en
+Supabase):
 
 ```bash
 python scripts/demo_flujo_completo.py
 ```
 
 Esperado: 6 recomendaciones generadas y, en el resumen, 0 "Crítico", 1
-"Atención", 5 "Sin riesgo", 2 con "Ahorro detectado" y una suma de ahorro neto de
-1.869,75. El script es **interactivo**: al final pregunta si guardar en Supabase.
-Si se responde "S", escribe en `recomendaciones`, cruza los uuid generados y
-guarda las **36 evaluaciones** (6 recomendaciones × 6 criterios) en
-`evaluaciones_criterios`; si se responde "N", solo imprime el reporte y no escribe
-nada. Para obtener las 36 evaluaciones la tabla `recomendaciones` debe estar vacía
-(al cierre de este documento lo estaba); con corridas anteriores acumuladas el
-script lo advierte antes de escribir.
+"Atención", 5 "Sin riesgo", 2 con "Ahorro detectado" y una suma de ahorro
+neto de 1.869,75. El script es **interactivo**: al final pregunta si guardar
+en Supabase. Si se responde "S", escribe en `recomendaciones`, cruza los uuid
+generados y guarda las **36 evaluaciones** (6 recomendaciones × 6 criterios)
+en `evaluaciones_criterios`; si se responde "N", solo imprime el reporte y no
+escribe nada. Para obtener las 36 evaluaciones la tabla `recomendaciones`
+debe estar vacía; con corridas anteriores acumuladas el script lo advierte
+antes de escribir.
 
-**4. Verificar el entorno** (los tres requieren `.env` configurado):
+**4. Verificar el entorno del backend** (los tres requieren `.env`
+configurado):
 
 ```bash
 python scripts/verificar_rls.py
@@ -333,21 +359,48 @@ python scripts/verificar_service_role.py
 python scripts/verificar_zai.py
 ```
 
-Esperado: los tres terminan sin errores. Verifican, respectivamente, que `anon`
-solo puede leer, que `service_role` puede escribir y que la API del LLM responde.
+Esperado: los tres terminan sin errores. Verifican, respectivamente, que
+`anon` solo puede leer, que `service_role` puede escribir y que la API del
+LLM responde.
 
+**5. Instalar dependencias del frontend:**
+
+```bash
+cd frontend
+npm install
+```
+
+**6. Levantar el frontend:**
+
+```bash
+cd frontend
+npm run dev
+```
+
+Esperado: Vite levanta el servidor en `http://localhost:5173`. Desde ahí se
+puede acceder a las vistas de recomendaciones, explicabilidad, proveedores,
+chat, KPIs y configuración (esta última solo si el usuario es admin).
+
+**7. Levantar la API del agente** (necesario para el chat):
+
+```bash
+python scripts/run_api.py
+```
+
+Esperado: FastAPI levanta el servidor en `http://localhost:8000`.
 ---
 
 ## Referencias
 
-- Ver `docs/mvp.md` para la especificación del producto (alcance, requisitos,
-  rúbrica de 6 criterios y modelo de datos).
+- Ver `docs/mvp.md` para la especificación del producto (alcance,
+  requisitos, rúbrica de 6 criterios y modelo de datos).
+- Ver `docs/prd.md` para el documento de requisitos original.
+  **Nota**: `docs/mvp.md` y `docs/prd.md` no están versionados en el
+  repositorio; se distribuyen en los documentos tecnicos de la plataforma.
 - Ver `README.md` para setup e instalación.
-- Ver `docs/verificacion.md` para la guía de verificación del sistema (comandos y
-  resultados esperados nivel por nivel).
-- Ver `docs/pendientes.md` para deuda técnica y `docs/decisiones-diseno.md` para las
-  decisiones de diseño.
-- Ver `docs/prd.md` para el documento de requisitos
-  original.
-- Ver `db/schema.sql` y `db/seed_sintetico.sql` para el esquema y los datos de
-  prueba.
+- Ver `docs/verificacion.md` para la guía de verificación del sistema
+  (comandos y resultados esperados nivel por nivel).
+- Ver `docs/pendientes.md` para deuda técnica y `docs/decisiones-diseno.md`
+  para las decisiones de diseño.
+- Ver `db/schema.sql` y `db/seed_sintetico.sql` para el esquema y los
+  datos de prueba.
