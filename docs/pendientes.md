@@ -24,6 +24,18 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Si en el futuro se quiere configurabilidad total, añadir esos
         parámetros a la tabla.
 
+- [ ] **Reflejar cambios de parámetros en el frontend** (post-MVP, menor)
+      - Los stores del frontend que calculan estados (por ejemplo,
+        `proveedores`) usan valores hardcodeados en lugar de leer
+        `parametros_configuracion`.
+      - Consecuencia: cambiar un parámetro en la UI se refleja en el
+        motor (al re-ejecutar el pipeline) pero no en los badges del
+        frontend.
+      - Solución: que los stores lean los parámetros al calcular los
+        estados.
+      - No es crítico: el motor (que decide las recomendaciones) sí
+        refleja los cambios.
+
 - [ ] **Validar `float('inf')` en `ahorro.py`** (menor)
       - Actualmente `umbral_ahorro_pct = float('inf')` pasa la validación
         (solo se rechaza NaN y negativos).
@@ -238,6 +250,12 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Script `db/restaurar_parametros.sql` para restaurar los valores
         por defecto.      
       
+- [x] **Correcciones de la verificación end-to-end**
+      - Home: texto actualizado y botones de acceso rápido.
+      - Cola de recomendaciones: ahorro neto con símbolo `$`.
+      - Panel de KPIs: "Con ahorro detectado" usa el criterio 6 del
+        evaluador (no `> 0`).
+              
 ## Notas de configurabilidad
 
 - **`config.py` es el único punto de entrada de parámetros.** Ningún módulo
