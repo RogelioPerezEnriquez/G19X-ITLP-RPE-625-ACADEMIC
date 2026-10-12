@@ -50,8 +50,9 @@ export const useKpisStore = defineStore('kpis', {
   actions: {
     /**
      * Consulta `recomendaciones` con su relación de `productos` (para obtener
-     * `stock_actual`), calcula la urgencia de cada fila y agrega todas las
-     * métricas del panel en `metricas`. Devuelve el objeto de métricas
+     * `stock_actual`) y `evaluaciones_criterios` (para el conteo del criterio
+     * 6, "Ahorro detectado"), calcula la urgencia de cada fila y agrega todas
+     * las métricas del panel en `metricas`. Devuelve el objeto de métricas
      * (queda en ceros si hubo error).
      */
     async calcular() {
@@ -59,11 +60,27 @@ export const useKpisStore = defineStore('kpis', {
       this.error = null
 
       try {
-        const { data, error } = await supabase
-          .from('recomendaciones')
-          .select('*, productos(nombre, stock_actual)')
+        // Las dos consultas son independientes: se lanzan en paralelo. La
+        // segunda cuenta las evaluaciones del criterio 6 ("oportunidad de
+        // ahorro") con estado "Ahorro detectado"; hay una sola fila de ese
+        // criterio por recomendación, así que el conteo equivale a la
+        // cantidad de recomendaciones con ahorro detectado según el
+        // evaluador (umbral del 3 % del costo total del pedido).
+        const [resultadoRecomendaciones, resultadoAhorro] = await Promise.all([
+          supabase
+            .from('recomendaciones')
+            .select('*, productos(nombre, stock_actual)'),
+          supabase
+            .from('evaluaciones_criterios')
+            .select('id', { count: 'exact', head: true })
+            .eq('criterio', 'oportunidad_ahorro')
+            .eq('estado', 'Ahorro detectado'),
+        ])
 
-        if (error) throw error
+        if (resultadoRecomendaciones.error) throw resultadoRecomendaciones.error
+        if (resultadoAhorro.error) throw resultadoAhorro.error
+
+        const data = resultadoRecomendaciones.data
 
         const metricas = metricasVacias()
         const productosIds = new Set()
@@ -98,11 +115,6 @@ export const useKpisStore = defineStore('kpis', {
           const ahorro = Number(fila.ahorro_neto_estimado ?? 0)
           if (Number.isFinite(ahorro)) {
             metricas.suma_ahorro_neto += ahorro
-            // Aproximación del criterio 6: hay ahorro detectado si el ahorro
-            // neto estimado es estrictamente positivo.
-            if (ahorro > 0) {
-              metricas.con_ahorro_detectado += 1
-            }
           }
 
           if (fila.producto_id) {
@@ -113,6 +125,9 @@ export const useKpisStore = defineStore('kpis', {
         }
 
         metricas.productos_unicos = productosIds.size
+        // Conteo exacto según el criterio 6 del evaluador (no según el signo
+        // de `ahorro_neto_estimado`).
+        metricas.con_ahorro_detectado = resultadoAhorro.count ?? 0
 
         this.metricas = metricas
         return this.metricas

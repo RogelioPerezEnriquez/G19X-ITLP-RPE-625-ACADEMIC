@@ -36,6 +36,13 @@ function formatearCantidad(valor) {
   return Number.isFinite(numero) ? formateadorCantidad.format(numero) : '—'
 }
 
+// Los montos se expresan en pesos mexicanos con el símbolo "$" antes del
+// número (p. ej. $1.470,64), igual que en el panel de KPIs.
+function formatearMoneda(valor) {
+  const texto = formatearDecimal(valor)
+  return texto === '—' ? texto : `$${texto}`
+}
+
 const clasificacion = computed(() => {
   const { clase_abc: abc, clase_xyz: xyz } = props.recomendacion
   if (!abc || !xyz) return null
@@ -43,7 +50,7 @@ const clasificacion = computed(() => {
 })
 
 const ahorroFormateado = computed(() =>
-  formatearDecimal(props.recomendacion.ahorro_neto_estimado)
+  formatearMoneda(props.recomendacion.ahorro_neto_estimado)
 )
 
 const cantidadFormateada = computed(() =>

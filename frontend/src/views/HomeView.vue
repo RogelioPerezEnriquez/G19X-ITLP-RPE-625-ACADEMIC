@@ -1,11 +1,23 @@
 <script setup>
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
 
-// Vista temporal de home.
-// Será reemplazada por la cola de recomendaciones en la fase 6.2.
+// Accesos rápidos a las vistas principales. "Configuración" sólo aplica a
+// administradores (la ruta además está protegida con `requiresAdmin`).
+const ACCESOS = [
+  { etiqueta: 'Recomendaciones', to: '/recomendaciones' },
+  { etiqueta: 'Proveedores', to: '/proveedores' },
+  { etiqueta: 'Chat', to: '/chat' },
+  { etiqueta: 'KPIs', to: '/kpis' },
+  { etiqueta: 'Configuración', to: '/configuracion', soloAdmin: true },
+]
+
+const accesosVisibles = computed(() =>
+  ACCESOS.filter((acceso) => !acceso.soloAdmin || authStore.isAdmin)
+)
 </script>
 
 <template>
@@ -19,16 +31,16 @@ const authStore = useAuthStore()
     >
       Administrador
     </span>
-    <p class="text-gray-600">
-      Sistema en construcción. Las vistas se agregarán en las
-      próximas fases.
-    </p>
 
-    <RouterLink
-      to="/recomendaciones"
-      class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-    >
-      Ver recomendaciones
-    </RouterLink>
+    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <RouterLink
+        v-for="acceso in accesosVisibles"
+        :key="acceso.to"
+        :to="acceso.to"
+        class="rounded-md bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-blue-700"
+      >
+        {{ acceso.etiqueta }}
+      </RouterLink>
+    </div>
   </div>
 </template>
