@@ -804,6 +804,8 @@ determinada manera.
 - **Escritura solo con `service_role`.** RLS está habilitado en las 7 tablas con
   políticas de solo lectura para `anon` y `authenticated`; todo el backend escribe
   con `service_role`, y el frontend y el agente leerán con `anon`.
-- **Ingesta manual en el MVP.** El paquete `backend/src/ingesta/` está vacío por
-  decisión de alcance: los datos entran aplicando `db/schema.sql` y
-  `db/seed_sintetico.sql` en el editor SQL de Supabase (`docs/mvp.md` §8.3).
+- - **Ingesta implementada.** El script `backend/src/ingesta/cargar_dataset.py`
+  (con CLI en `__main__.py`) carga los CSVs de `data/raw/` en Supabase,
+  validando columnas y campos clave. El seed `db/seed_sintetico.sql` sigue
+  disponible como alternativa para cargar los datos de prueba directamente
+  en el editor SQL de Supabase (`docs/mvp.md` §8.3).
