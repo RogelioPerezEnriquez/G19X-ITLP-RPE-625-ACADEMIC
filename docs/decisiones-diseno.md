@@ -15,7 +15,7 @@ verificado, en `docs/estado-implementacion.md`; la deuda técnica abierta, en
 `docs/verificacion.md`. Cuando hace falta ese nivel de detalle, este documento
 referencia esos archivos en lugar de repetir su contenido.
 
-**Cómo leerlo.** Las decisiones `D-01` a `D-10` son las que afectan el
+**Cómo leerlo.** Las decisiones `D-01` a `D-15` son las que afectan el
 comportamiento observable del sistema o su arquitectura, en el orden en que se
 tomaron durante el desarrollo. La sección final lista, sin formato ADR, las
 decisiones menores: convenciones de implementación aplicadas de forma
@@ -34,6 +34,12 @@ transversal. Cada decisión cierra con su implementación de referencia
 - **D-08** — Ordenamiento por urgencia con `pd.Categorical`
 - **D-09** — Diseño de `guardar_recomendaciones`
 - **D-10** — Datos sintéticos diseñados para ejercitar la rúbrica
+- **D-11** — Tools del agente usan `producto_nombre` en lugar de `producto_id`
+- **D-12** — Cliente LLM crea el cliente Supabase internamente
+- **D-13** — Errores de tools se devuelven al LLM; errores de Supabase se propagan
+- **D-14** — Registro público abierto en el MVP (contradice RF-12)
+- **D-15** — La API del agente se implementó con FastAPI
+
 
 ---
 
@@ -681,7 +687,55 @@ registro abierto.
 - Cualquiera con el link puede crear una cuenta.
 - Si en el futuro se quiere cumplir RF-12, se desactiva el registro en
   Supabase Auth y se elimina RegisterView.
-      
+
+## D-15: La API del agente se implementó con FastAPI
+
+**Contexto**: El MVP.md §8 menciona "API de LLM con function calling" como
+tecnología del agente conversacional, sin especificar el framework. El
+agente está implementado en Python (`backend/src/agente/llm_client.py`)
+y necesita exponerse al frontend (Vue 3) a través de HTTP. La restricción
+de "solo lectura" del agente aplica tanto a las tools como a la API que
+las expone.
+
+**Alternativas consideradas**:
+
+- A) **FastAPI** (Python). Reutiliza el agente existente. Requiere
+  levantar un segundo proceso en la demo.
+- B) **Supabase Edge Functions** (Deno). No requiere servidor Python,
+  pero implica reescribir `llm_client.py` y `tools.py` en
+  TypeScript/Deno.
+- C) **Reimplementar el agente en Deno** e invocarlo desde el frontend
+  directamente. Duplica lógica (las 5 tools + el bucle de function
+  calling).
+- D) **Exponer la API key del LLM en el frontend** y llamar a Z.ai
+  directamente. Descartada por seguridad: la key quedaría visible en
+  el navegador.
+
+**Decisión**: **A** (FastAPI).
+
+**Justificación**:
+
+1. **Reutiliza el 100% del código del agente**: `llm_client.py`,
+   `tools.py` y `tools_schema.py` ya están implementados y testeados.
+2. **No duplica lógica**: las opciones B y C obligarían a mantener dos
+   versiones del agente (Python y TypeScript/Deno).
+3. **Es rápido de implementar**: `backend/src/agente/api.py` tiene
+   ~50 líneas, más `scripts/run_api.py` para levantarlo.
+4. **La restricción de solo lectura se mantiene**: la API solo expone
+   el endpoint `POST /agente/preguntar`. No hay endpoints de escritura.
+5. **Los tests del agente siguen siendo válidos** (no dependen del
+   transporte HTTP).
+
+**Consecuencias**:
+
+- El sistema requiere **2 procesos** en la demo: Vite (frontend) y
+  FastAPI (API del agente).
+- Hay que añadir `fastapi` y `uvicorn` a `backend/requirements.txt`.
+- El frontend consume el agente a través de `VITE_API_URL` (configurado
+  en `.env`).
+- **CORS** debe configurarse en FastAPI para permitir
+  `http://localhost:5173` (el origen de Vite).
+
 ---
 
 ## Otras decisiones menores
