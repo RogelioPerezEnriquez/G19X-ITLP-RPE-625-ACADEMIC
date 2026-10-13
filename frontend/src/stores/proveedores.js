@@ -7,10 +7,17 @@ import { supabase } from '../services/supabase'
 //
 //   score = cumplimiento_entrega_pct * 0.6 + (100 - tasa_defectos_pct) * 0.4
 //
-// Los cortes sobre el score definen el estado:
-//   "Confiable"              si score >= 80
-//   "Aceptable con reservas" si 60 <= score < 80
-//   "Riesgoso"               si score < 60
+// Los cortes sobre el score definen el estado (corte confiable INCLUSIVO,
+// corte riesgoso EXCLUSIVO: un score igual al umbral de riesgo es "Aceptable"):
+//   "Confiable"              si score >= umbralConfiable
+//   "Riesgoso"               si score <  umbralRiesgoso
+//   "Aceptable con reservas" en cualquier otro caso
+//
+// Los umbrales se leen de `parametros_configuracion` en cada `listar()` para
+// respetar el criterio 7 (configurabilidad): cambiarlos en la pantalla de
+// configuración se refleja acá sin tocar código. Los valores 80 y 60 de abajo
+// son solo el FALLBACK, usado si la consulta falla, si falta un parámetro o si
+// su valor no es un número válido.
 export const PESO_CUMPLIMIENTO = 0.6
 export const PESO_CALIDAD = 0.4
 export const UMBRAL_CONFIABLE = 80
@@ -33,14 +40,29 @@ export function calcularScore(cumplimientoEntregaPct, tasaDefectosPct) {
   )
 }
 
-export function calcularEstado(score) {
-  if (score >= UMBRAL_CONFIABLE - TOLERANCIA_SCORE) return 'Confiable'
-  if (score < UMBRAL_RIESGOSO - TOLERANCIA_SCORE) return 'Riesgoso'
+// Regla de clasificación (replicada de `backend/src/motor/proveedor.py`):
+//   score >= umbralConfiable  -> "Confiable"              (corte INCLUSIVO)
+//   score <  umbralRiesgoso   -> "Riesgoso"               (corte EXCLUSIVO:
+//   cualquier otro caso       -> "Aceptable con reservas"  un score igual al
+//                                                          umbral de riesgo
+//                                                          NO es Riesgoso)
+// Si no se pasan umbrales, se usan los defaults (fallback, ver arriba).
+export function calcularEstado(
+  score,
+  umbralConfiable = UMBRAL_CONFIABLE,
+  umbralRiesgoso = UMBRAL_RIESGOSO
+) {
+  if (score >= umbralConfiable - TOLERANCIA_SCORE) return 'Confiable'
+  if (score < umbralRiesgoso - TOLERANCIA_SCORE) return 'Riesgoso'
   return 'Aceptable con reservas'
 }
 
-// Agrega a la fila de `proveedores` el score y el estado calculados.
-function enriquecer(fila) {
+// Agrega a la fila de `proveedores` el score y el estado calculados con los
+// umbrales vigentes (leídos de `parametros_configuracion` o los defaults).
+function enriquecer(
+  fila,
+  umbrales = { confiable: UMBRAL_CONFIABLE, riesgoso: UMBRAL_RIESGOSO }
+) {
   const score = calcularScore(
     fila.cumplimiento_entrega_pct,
     fila.tasa_defectos_pct
@@ -48,7 +70,7 @@ function enriquecer(fila) {
   return {
     ...fila,
     score,
-    estado: calcularEstado(score),
+    estado: calcularEstado(score, umbrales.confiable, umbrales.riesgoso),
   }
 }
 
@@ -57,6 +79,52 @@ function compararProveedores(a, b) {
   const porScore = Number(b.score ?? 0) - Number(a.score ?? 0)
   if (porScore !== 0) return porScore
   return String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es')
+}
+
+// Parámetros de `parametros_configuracion` que definen los cortes del score.
+const PARAM_CONFIABLE = 'score_proveedor_confiable'
+const PARAM_RIESGOSO = 'score_proveedor_riesgoso'
+
+// Un valor configurable es válido solo si existe y es un número finito.
+// `null`/`undefined`/'' se rechazan explícitamente para no convertirlos
+// silenciosamente en 0 (Number(null) === 0).
+function esUmbralValido(valor) {
+  if (valor === null || valor === undefined || valor === '') return false
+  return Number.isFinite(Number(valor))
+}
+
+/**
+ * Lee los umbrales de score desde `parametros_configuracion` (criterio 7,
+ * configurabilidad). Los defaults (80 y 60) se inicializan ANTES de consultar
+ * y son el fallback: si la consulta falla, si falta un parámetro o si su valor
+ * no es un número válido, ese umbral conserva su default y se continúa con el
+ * resto. Nunca lanza: el listado de proveedores no debe caerse por la tabla
+ * de configuración.
+ */
+async function cargarUmbrales() {
+  const umbrales = { confiable: UMBRAL_CONFIABLE, riesgoso: UMBRAL_RIESGOSO }
+
+  try {
+    const { data, error } = await supabase
+      .from('parametros_configuracion')
+      .select('nombre_parametro, valor')
+      .in('nombre_parametro', [PARAM_CONFIABLE, PARAM_RIESGOSO])
+
+    if (error) return umbrales
+
+    for (const fila of data ?? []) {
+      if (fila.nombre_parametro === PARAM_CONFIABLE && esUmbralValido(fila.valor)) {
+        umbrales.confiable = Number(fila.valor)
+      }
+      if (fila.nombre_parametro === PARAM_RIESGOSO && esUmbralValido(fila.valor)) {
+        umbrales.riesgoso = Number(fila.valor)
+      }
+    }
+  } catch {
+    // Error inesperado (p. ej. red): se conservan los defaults.
+  }
+
+  return umbrales
 }
 
 // Los mensajes de Supabase llegan en inglés: se traducen los casos conocidos y
@@ -85,22 +153,32 @@ export const useProveedoresStore = defineStore('proveedores', {
 
   actions: {
     /**
-     * Consulta `proveedores`, calcula el score y el estado de cada fila y deja
-     * `items` ordenado por score descendente (desempate por nombre ascendente).
-     * Devuelve el arreglo resultante (queda vacío si hubo error).
+     * Consulta `proveedores` y los umbrales de `parametros_configuracion`
+     * (criterio 7), calcula el score y el estado de cada fila con esos
+     * umbrales y deja `items` ordenado por score descendente (desempate por
+     * nombre ascendente). Se llama en cada ingreso a la vista, así que un
+     * cambio de parámetros se refleja al volver a entrar. Devuelve el arreglo
+     * resultante (queda vacío si hubo error).
      */
     async listar() {
       this.cargando = true
       this.error = null
 
       try {
-        const { data, error } = await supabase
-          .from('proveedores')
-          .select('id, nombre, cumplimiento_entrega_pct, tasa_defectos_pct')
+        // Las dos consultas son independientes: se disparan en paralelo. Si la
+        // de parámetros falla, `cargarUmbrales` resuelve con los defaults.
+        const [umbrales, { data, error }] = await Promise.all([
+          cargarUmbrales(),
+          supabase
+            .from('proveedores')
+            .select('id, nombre, cumplimiento_entrega_pct, tasa_defectos_pct'),
+        ])
 
         if (error) throw error
 
-        this.items = (data ?? []).map(enriquecer).sort(compararProveedores)
+        this.items = (data ?? [])
+          .map((fila) => enriquecer(fila, umbrales))
+          .sort(compararProveedores)
         return this.items
       } catch (error) {
         this.error = mensajeDeError(error)
