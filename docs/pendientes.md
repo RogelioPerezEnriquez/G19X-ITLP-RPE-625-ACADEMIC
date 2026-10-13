@@ -24,18 +24,6 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Si en el futuro se quiere configurabilidad total, añadir esos
         parámetros a la tabla.
 
-- [ ] **Reflejar cambios de parámetros en el frontend** (post-MVP, menor)
-      - Los stores del frontend que calculan estados (por ejemplo,
-        `proveedores`) usan valores hardcodeados en lugar de leer
-        `parametros_configuracion`.
-      - Consecuencia: cambiar un parámetro en la UI se refleja en el
-        motor (al re-ejecutar el pipeline) pero no en los badges del
-        frontend.
-      - Solución: que los stores lean los parámetros al calcular los
-        estados.
-      - No es crítico: el motor (que decide las recomendaciones) sí
-        refleja los cambios.
-
 - [ ] **Validar `float('inf')` en `ahorro.py`** (menor)
       - Actualmente `umbral_ahorro_pct = float('inf')` pasa la validación
         (solo se rechaza NaN y negativos).
@@ -90,7 +78,7 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
         login sin opción de registro".
       - Para cumplir: desactivar el registro en Supabase Auth y
         eliminar RegisterView + el link en LoginView.
-      - Decisión documentada en docs/decisiones-diseno.md (D-14). 
+      - Decisión documentada en docs/decisiones-diseno.md (D-14).
 
 - [ ] **Ajustar el seed para cubrir el estado "Riesgoso"** (opcional)
       - `SEED_RiesgoTotal` tiene valores `(50, 25)` que dan score 60.0
@@ -99,7 +87,20 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
         - `(40, 30)`: score 52.0 → Riesgoso.
         - `(45, 25)`: score 57.0 → Riesgoso.
       - Requiere recargar el seed + re-ejecutar el pipeline.
-      - Hacer al final, si se quiere una demo con los 3 estados.           
+      - Hacer al final, si se quiere una demo con los 3 estados.
+
+- [ ] **Reflejar cambios de parámetros en el frontend** (post-MVP, menor)
+      - PARCIALMENTE RESUELTO: el store `proveedores` ya lee
+        `parametros_configuracion` al calcular el estado.
+      - **Aclaración sobre `recomendaciones`**: el store de
+        recomendaciones NO replica la lógica del motor. Solo lee datos
+        ya calculados. Si se cambia un parámetro, los datos en
+        `recomendaciones` siguen siendo los anteriores hasta que se
+        re-ejecute el pipeline (`python scripts/demo_flujo_completo.py`).
+      - Esto es **intencional**: el pipeline es costoso y el
+        administrador quiere revisar los cambios antes.
+      - Mejora futura: agregar un botón "Recalcular" en el frontend que
+        ejecute el pipeline.
 
 ## Resueltos
 
@@ -192,7 +193,7 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - NavBar con estado de sesión y badge "Administrador".
       - Tabla `admins` creada con RLS y policies.
       - Policy de UPDATE en `parametros_configuracion` para admins.
-        
+
 - [x] **Cola de recomendaciones (criterio 4)**
       - Vista `RecomendacionesView.vue` en `/recomendaciones`.
       - Store `recomendaciones` con carga desde Supabase.
@@ -201,7 +202,7 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Filtro por urgencia (cliente, instantáneo).
       - Click en tarjeta navega a `/recomendaciones/:productoId`
         (placeholder, se completa en la fase 6.3).
-      - Formato de números en español (con `useGrouping: 'always'`). 
+      - Formato de números en español (con `useGrouping: 'always'`).
 
 - [x] **Panel de explicabilidad (criterio 5)**
       - Vista `RecomendacionDetalleView.vue` en
@@ -217,7 +218,7 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Store `proveedores` con cálculo de score y estado en el frontend.
       - Componentes `ProveedorCard.vue`, `ScoreBadge.vue`,
         `BarraProgreso.vue`.
-      - Coherencia de tolerancia (1e-9) con el backend.     
+      - Coherencia de tolerancia (1e-9) con el backend.
 
 - [x] **Chat con el agente conversacional**
       - Store `chat` con manejo de mensajes e historial.
@@ -227,7 +228,7 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Botones de sugerencia, indicador "escribiendo...", auto-scroll.
       - API FastAPI que expone el agente (`backend/src/agente/api.py`).
       - Script para levantar el servidor (`scripts/run_api.py`).
-      - Prompt del sistema usa pesos mexicanos (`$`).         
+      - Prompt del sistema usa pesos mexicanos (`$`).
 
 - [x] **Panel de KPIs**
       - Vista `KpisView.vue` en `/kpis`.
@@ -248,14 +249,22 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - RLS: la policy `solo_admins_actualizan_parametros` restringe el
         UPDATE a admins.
       - Script `db/restaurar_parametros.sql` para restaurar los valores
-        por defecto.      
-      
+        por defecto.
+
 - [x] **Correcciones de la verificación end-to-end**
       - Home: texto actualizado y botones de acceso rápido.
       - Cola de recomendaciones: ahorro neto con símbolo `$`.
       - Panel de KPIs: "Con ahorro detectado" usa el criterio 6 del
         evaluador (no `> 0`).
-              
+
+- [x] **Reflejar cambios de parámetros en proveedores**
+      - El store `proveedores` lee `parametros_configuracion` al
+        calcular el estado (Confiable / Aceptable / Riesgoso).
+      - Tolerancia `1e-9` replicada del backend para evitar falsos
+        positivos por ruido de punto flotante.
+      - Defaults 80/60 como fallback si la consulta falla o si falta
+        un parámetro.
+
 ## Notas de configurabilidad
 
 - **`config.py` es el único punto de entrada de parámetros.** Ningún módulo
@@ -307,7 +316,7 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
   - Sin riesgo: 5
   - Crítico: 0
   - Con "Ahorro detectado": 2 (Engrane G7, Tornillo M3)
-  - Suma total de ahorro neto: $1,869.75
+  - Suma total de ahorro neto: $1.869,75
 
 - **Verificación end-to-end completa (recomendador + evaluador)**: el
   flujo completo funciona con datos reales. Se generan:
