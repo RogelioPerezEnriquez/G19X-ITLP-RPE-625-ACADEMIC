@@ -73,7 +73,7 @@ para todos los productos.»
    python -m pytest -q
    ```
 
-   Esperado: `445 passed` (255 de los 445 tests corresponden a los 6
+   Esperado: `445 passed` (254 de los 445 tests corresponden a los 6
    módulos del motor: `abc.py`, `xyz.py`, `demanda.py`, `eoq_rop.py`,
    `proveedor.py`, `ahorro.py`).
 

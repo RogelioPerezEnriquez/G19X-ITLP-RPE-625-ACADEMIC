@@ -192,3 +192,39 @@ create policy "lectura_anon_authenticated" on evaluaciones_criterios
 
 create policy "lectura_anon_authenticated" on parametros_configuracion
     for select to anon, authenticated using (true);
+
+-- ============================================================
+-- Autenticación y roles (fase de frontend)
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- Tabla `admins`
+-- ------------------------------------------------------------
+-- Contiene el user_id (de auth.users) de los usuarios con rol
+-- administrador. La creación de admins se hace con service_role (o desde
+-- el dashboard de Supabase).
+
+create table admins (
+    user_id uuid primary key references auth.users (id) on delete cascade,
+    creado_en timestamptz not null default now()
+);
+
+alter table admins enable row level security;
+
+-- Policy de SELECT: cada usuario autenticado puede ver si él mismo es
+-- admin (no puede ver la lista completa).
+
+create policy "usuario_ve_su_propio_admin" on admins
+    for select to authenticated
+    using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------
+-- Policy de UPDATE en `parametros_configuracion`
+-- ------------------------------------------------------------
+-- Solo los admins pueden modificar parámetros. Los usuarios normales
+-- (authenticated) no pueden.
+
+create policy "solo_admins_actualizan_parametros" on parametros_configuracion
+    for update to authenticated
+    using (auth.uid() in (select user_id from admins))
+    with check (auth.uid() in (select user_id from admins));

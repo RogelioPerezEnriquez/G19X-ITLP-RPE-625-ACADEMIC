@@ -42,8 +42,8 @@ La suite de tests tiene 445 tests pasando, y se realizaron corridas
 end-to-end exitosas contra los datos reales del seed.
 
 Los 8 criterios de aceptación de `docs/mvp.md` §15 se cumplen.
-Queda pendiente únicamente la **verificación end-to-end con la interfaz
-gráfica** (fase de integración final).
+El MVP está funcionalmente completo. La verificación end-to-end con
+la interfaz gráfica se realizó (ver `docs/verificacion-final.md`).
 
 ---
 
@@ -291,21 +291,8 @@ El MVP está funcionalmente completo. Todos los componentes del alcance
 están implementados y los 8 criterios de aceptación de `docs/mvp.md` §15
 se cumplen.
 
-Queda pendiente únicamente la **verificación end-to-end** con la
-interfaz gráfica (fase de integración final): recorrer el flujo completo
-desde la ingesta de datos hasta la consulta al agente, y documentar los
-resultados.
-
-### Verificación pendiente
-
-- Recorrido end-to-end con la UI:
-  * Cargar el dataset (o usar el seed ya cargado).
-  * Generar recomendaciones y evaluaciones.
-  * Ver la cola priorizada en el frontend.
-  * Abrir el panel de explicabilidad.
-  * Consultar al agente desde el chat.
-  * Modificar un parámetro desde la pantalla de configuración.
-- Ajustes finales que surjan de esa verificación.
+La verificación end-to-end con la interfaz gráfica se realizó (ver
+`docs/verificacion-final.md`).
 
 ---
 
