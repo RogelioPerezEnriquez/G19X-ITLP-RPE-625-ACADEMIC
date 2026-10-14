@@ -12,27 +12,31 @@ conversacional de consulta en lenguaje natural.
 
 ## Estado del proyecto
 
-🚧 En desarrollo.
+MVP funcionalmente completo.
 
 | Componente | Estado |
 |---|---|
-| Esquema de base de datos (Supabase) | ✅ |
-| Datos sintéticos de prueba | ✅ |
-| Verificación de RLS | ✅ |
-| Conexión con LLM (Z.ai) | ✅ |
-| Motor OR (ABC, XYZ, demanda, EOQ, ROP, proveedor, ahorro) | ✅ |
-| Recomendador (orquestador del motor) | ✅ |
-| Evaluador (rúbrica de 6 criterios) | ✅ |
-| Configurabilidad de umbrales | ✅ |
-| Agente conversacional | ⏳ |
-| Frontend (Vue 3) | ⏳ |
-| Script de ingesta CSV/Excel | ⏳ |
+| Esquema de base de datos (Supabase) | Completo |
+| Datos sintéticos de prueba | Completo |
+| Verificación de RLS | Completo |
+| Conexión con LLM (Z.ai) | Completo |
+| Motor OR (ABC, XYZ, demanda, EOQ, ROP, proveedor, ahorro) | Completo |
+| Recomendador (orquestador del motor) | Completo |
+| Evaluador (rúbrica de 6 criterios) | Completo |
+| Configurabilidad de umbrales | Completo |
+| Agente conversacional | Completo |
+| Frontend (Vue 3) | Completo |
+| Script de ingesta CSV/Excel | Completo |
+
+Ver `docs/estado-implementacion.md` para el detalle del estado y
+`docs/verificacion-final.md` para la verificación de los 8 criterios de
+aceptación.
 
 ---
 
 ## Datos
 
-⚠️ **Este proyecto usa datos sintéticos**, no reales. Los datasets fueron
+**Este proyecto usa datos sintéticos**, no reales. Los datasets fueron
 diseñados específicamente para ejercitar los 6 criterios de la rúbrica de
 evaluación y permitir validar el motor contra resultados esperados.
 
@@ -52,28 +56,38 @@ funciona con cualquier dataset que respete el esquema de `db/schema.sql`.
 
 ```
 .
-├── db/                    Esquema SQL y seed de datos
-│   ├── schema.sql         Esquema de las 7 tablas + RLS + parámetros
-│   └── seed_sintetico.sql Datos de prueba
-├── backend/               Lógica de negocio (Python)
+├── db/                          Esquema SQL, seed y scripts de restauración
+│   ├── schema.sql               Esquema completo (8 tablas + RLS + políticas + parámetros)
+│   ├── seed_sintetico.sql       Datos de prueba
+│   └── restaurar_parametros.sql Restaurar los 10 parámetros a sus valores por defecto
+├── backend/                     Lógica de negocio (Python)
 │   ├── src/
-│   │   ├── motor/         Motor OR (6 módulos puros)
-│   │   ├── config.py      Carga de parámetros de configuración
-│   │   ├── recomendador.py Orquestador del motor
-│   │   ├── evaluador.py   Rúbrica de 6 criterios
-│   │   └── agente/        Agente conversacional + API FastAPI
-│   ├── tests/             Suite de tests (pytest)
+│   │   ├── motor/               Motor OR (6 módulos puros)
+│   │   ├── agente/              Agente conversacional + API FastAPI
+│   │   ├── ingesta/             Script de ingesta CSV/Excel
+│   │   ├── config.py            Carga de parámetros de configuración
+│   │   ├── recomendador.py      Orquestador del motor
+│   │   └── evaluador.py         Rúbrica de 6 criterios
+│   ├── tests/                   Suite de tests (pytest)
 │   └── requirements.txt
-├── frontend/              Interfaz de usuario (Vue 3)
-├── scripts/               Scripts de verificación y demo
-│   ├── verificar_*.py     Verificación de entorno
-│   ├── demo_*.py          Demos del motor
-│   └── run_api.py         Levantar la API del agente
-├── data/                  Datos de entrada (CSVs de ejemplo)
-├── docs/                  Documentación del proyecto
+├── frontend/                    Interfaz de usuario (Vue 3)
+│   ├── src/
+│   │   ├── views/               6 vistas (recomendaciones, explicabilidad, proveedores, chat, KPIs, configuración)
+│   │   ├── components/          Componentes reutilizables
+│   │   ├── stores/              Stores de Pinia
+│   │   ├── services/            Cliente de Supabase
+│   │   └── router/              Rutas y guards
+│   └── package.json
+├── scripts/                     Scripts de verificación, demo y API
+│   ├── verificar_*.py           Verificación de entorno (RLS, service_role, LLM, agente)
+│   ├── demo_*.py                Demos del motor
+│   └── run_api.py               Levantar la API del agente
+├── data/                        Datos de entrada (CSVs de ejemplo)
+├── docs/                        Documentación del proyecto
 │   ├── estado-implementacion.md
 │   ├── decisiones-diseno.md
 │   ├── verificacion.md
+│   ├── verificacion-final.md
 │   └── pendientes.md
 └── README.md
 ```
@@ -88,10 +102,10 @@ distribuyen en la plataforma.
 | Componente | Tecnología |
 |---|---|
 | Motor de optimización | Python 3.11+ (pandas, numpy) |
-| Persistencia y auth | Supabase (Postgres) |
+| Persistencia y auth | Supabase (Postgres + Auth + RLS) |
+| API del agente | FastAPI + uvicorn |
 | Agente conversacional | Z.ai (GLM) con function calling |
-| Frontend | Vue 3 (Vite, Vue Router, Pinia) |
-| Visualización | Librería de gráficos embebida |
+| Frontend | Vue 3 (Vite, Vue Router, Pinia, Tailwind CSS) |
 | Testing | pytest |
 
 ---
@@ -132,25 +146,45 @@ Variables requeridas:
 | `LLM_BASE_URL` | Endpoint del LLM |
 | `LLM_API_KEY` | API key del LLM |
 | `LLM_MODEL` | Identificador del modelo |
+| `VITE_SUPABASE_URL` | URL de Supabase (para el frontend) |
+| `VITE_SUPABASE_ANON_KEY` | Key pública (para el frontend) |
+| `VITE_API_URL` | URL de la API del agente (por ejemplo, `http://localhost:8000`) |
 
-⚠️ **Nunca** subas el archivo `.env` al repositorio. Está en `.gitignore`.
+**Nunca** subas el archivo `.env` al repositorio. Está en `.gitignore`.
 
 ### 3. Crear las tablas en Supabase
 
 En el SQL Editor de Supabase, ejecutar en orden:
 
-1. `db/schema.sql` — crea las 7 tablas, habilita RLS y carga los 10
-   parámetros de configuración.
+1. `db/schema.sql` — crea las 8 tablas (7 de datos + `admins`), habilita
+   RLS, define las políticas y carga los 10 parámetros de configuración.
 2. `db/seed_sintetico.sql` — carga los datos de prueba.
 
-### 4. Instalar dependencias de Python
+### 4. Crear el usuario administrador
+
+1. Registrar un usuario desde el frontend (o desde Supabase Auth).
+2. Obtener su `user_id`.
+3. Insertar en la tabla `admins`:
+
+```sql
+INSERT INTO admins (user_id) VALUES ('<uuid-del-usuario>');
+```
+
+### 5. Instalar dependencias del backend
 
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
-### 5. Verificar el entorno
+### 6. Instalar dependencias del frontend
+
+```bash
+cd frontend
+npm install
+```
+
+### 7. Verificar el entorno
 
 Desde la raíz del proyecto:
 
@@ -162,7 +196,7 @@ python scripts/verificar_zai.py
 
 Los tres deben terminar sin errores.
 
-### 6. Correr la suite de tests
+### 8. Correr la suite de tests
 
 ```bash
 cd backend
@@ -172,6 +206,29 @@ python -m pytest -q
 Todos los tests deben pasar.
 
 Ver `docs/verificacion.md` para la guía completa de verificación.
+
+### 9. Levantar el sistema completo
+
+El sistema requiere 2 procesos en paralelo:
+
+**Terminal 1 — API del agente:**
+
+```bash
+python scripts/run_api.py
+```
+
+FastAPI levanta el servidor en `http://localhost:8000`.
+
+**Terminal 2 — Frontend:**
+
+```bash
+cd frontend
+npm run dev
+```
+
+Vite levanta el servidor en `http://localhost:5173`.
+
+Acceder a `http://localhost:5173` y loguearse con el usuario admin.
 
 ---
 
@@ -196,7 +253,8 @@ del motor los reciben como parámetros.
 | `score_proveedor_confiable` | 80 | Score mínimo para proveedor "confiable" |
 | `score_proveedor_riesgoso` | 60 | Score por debajo del cual es "riesgoso" |
 
-**Cómo cambiar un umbral**:
+**Cómo cambiar un umbral**: desde la pantalla de configuración del
+frontend (solo administradores), o directamente en Supabase:
 
 ```sql
 UPDATE parametros_configuracion
@@ -207,14 +265,17 @@ WHERE nombre_parametro = '<nombre_del_parametro>';
 El cambio se refleja en la siguiente ejecución del motor (no requiere
 reiniciar ni tocar código).
 
+**Cómo restaurar los valores por defecto**: ejecutar
+`db/restaurar_parametros.sql` en el SQL Editor de Supabase.
+
 ---
 
 ## Arquitectura
 
 ```
-Dataset sintético (SQL seed)
+Dataset sintético (SQL seed) o CSV/Excel
         ↓
-Supabase (Postgres + RLS)
+Supabase (Postgres + RLS + Auth)
         ↓
 config.py (carga de parámetros)
         ↓
@@ -230,31 +291,35 @@ recomendador.py (orquesta el motor)
         ↓
 evaluador.py (aplica la rúbrica de 6 criterios)
         ↓
-Agente conversacional (solo lectura) [pendiente]
+Agente conversacional (FastAPI + Z.ai, solo lectura)
         ↓
-Interfaz (cola + explicabilidad + chat + KPIs) [pendiente]
+Interfaz Vue 3 (cola + explicabilidad + proveedores + chat + KPIs + configuración)
 ```
 
-Ver `docs/mvp.md` para detalle de cada componente, `docs/pendientes.md` para deuda
-técnica y `docs/decisiones-diseno.md` para decisiones de diseño.
+Ver `docs/decisiones-diseno.md` para las decisiones de diseño y
+`docs/pendientes.md` para deuda técnica.
 
 ---
 
-## Scripts de demo
+## Scripts
 
-**`demo_recomendador.py`**: genera recomendaciones con datos reales del
-seed y las imprime en terminal.
+**Verificación de entorno:**
 
-```bash
-python scripts/demo_recomendador.py
-```
+- `scripts/verificar_rls.py` — confirma que `anon` solo puede leer.
+- `scripts/verificar_service_role.py` — confirma que `service_role` puede
+  escribir.
+- `scripts/verificar_zai.py` — confirma la conexión con el LLM.
+- `scripts/verificar_agente_rapido.py` — verifica el agente end-to-end.
 
-**`demo_flujo_completo.py`**: genera recomendaciones, las evalúa contra la
-rúbrica y las guarda opcionalmente en Supabase.
+**Demos del motor:**
 
-```bash
-python scripts/demo_flujo_completo.py
-```
+- `scripts/demo_recomendador.py` — genera recomendaciones y las imprime.
+- `scripts/demo_flujo_completo.py` — genera recomendaciones, las evalúa
+  contra la rúbrica y las guarda opcionalmente en Supabase.
+
+**API del agente:**
+
+- `scripts/run_api.py` — levanta el servidor FastAPI del agente.
 
 ---
 
