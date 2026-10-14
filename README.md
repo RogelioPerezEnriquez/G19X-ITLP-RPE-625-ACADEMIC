@@ -1,3 +1,7 @@
+**Alumno:** Rogelio Pérez Enríquez
+**Matrícula:** G19X-ITLP-RPE-625
+**Institución:** Instituto Tecnológico de La Piedad
+
 # Sistema Inteligente de Optimización de Compras
 
 MVP de un sistema de soporte a la decisión de compras que genera
@@ -268,6 +272,18 @@ reiniciar ni tocar código).
 **Cómo restaurar los valores por defecto**: ejecutar
 `db/restaurar_parametros.sql` en el SQL Editor de Supabase.
 
+## Usuario de prueba
+
+Para probar el sistema como administrador:
+
+| Campo | Valor |
+|---|---|
+| Email | `evaluador@prueba.com` |
+| Contraseña | `Prueba123` |
+
+**Nota**: este usuario tiene rol de administrador para probar la
+pantalla de configuración de parámetros (criterio 8).
+
 ---
 
 ## Arquitectura
@@ -322,6 +338,24 @@ Ver `docs/decisiones-diseno.md` para las decisiones de diseño y
 - `scripts/run_api.py` — levanta el servidor FastAPI del agente.
 
 ---
+
+## Lo que todavía no funciona
+
+El MVP está funcionalmente completo (los 8 criterios de aceptación se
+cumplen). Quedan pendientes algunas mejoras opcionales, documentadas en
+`docs/pendientes.md`:
+
+- **Configurabilidad total**: algunos parámetros (periodos por año,
+  margen de seguridad, pesos del score) siguen hardcodeados.
+- **Registro público**: el sistema tiene registro abierto; RF-12 pide
+  "sin registro público".
+- **Seed**: las clases ABC/XYZ calculadas no coinciden exactamente con
+  las diseñadas (por estimaciones a ojo de la varianza).
+- **Reflejo automático de parámetros en el frontend**: el store de
+  recomendaciones no re-ejecuta el pipeline al cambiar un parámetro
+  (es manual).
+
+Ver `docs/pendientes.md` para la lista completa.
 
 ## Licencia
 
