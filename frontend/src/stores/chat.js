@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
+import { supabase } from '../services/supabase'
 
 // URL base del backend FastAPI (se define en el `.env` de la raíz).
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const MENSAJE_SESION_EXPIRADA = 'Tu sesión expiró. Inicia sesión de nuevo.'
 
 // El mensaje de bienvenida es solo de UI: no se agrega al `historial` que se
 // envía al backend, porque el agente no lo necesita para contextualizar.
@@ -71,11 +73,28 @@ export const useChatStore = defineStore('chat', {
       this.cargando = true
 
       try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+          throw new Error(MENSAJE_SESION_EXPIRADA)
+        }
+
         const respuesta = await fetch(`${API_URL}/agente/preguntar`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
           body: JSON.stringify({ pregunta: texto, historial: this.historial }),
         })
+
+        if (respuesta.status === 401) {
+          try {
+            await supabase.auth.signOut()
+          } catch {
+            // Se mantiene el mensaje de sesión expirada aunque falle el cierre.
+          }
+          throw new Error(MENSAJE_SESION_EXPIRADA)
+        }
 
         if (!respuesta.ok) {
           throw new Error(`El agente respondió con un error (código ${respuesta.status}).`)
