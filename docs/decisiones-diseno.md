@@ -39,6 +39,7 @@ transversal. Cada decisión cierra con su implementación de referencia
 - **D-13** — Errores de tools se devuelven al LLM; errores de Supabase se propagan
 - **D-14** — Registro público abierto en el MVP (contradice RF-12)
 - **D-15** — La API del agente se implementó con FastAPI
+- **D-16** — Cierre del registro público para cumplir RF-12
 
 
 ---
@@ -688,6 +689,16 @@ registro abierto.
 - Si en el futuro se quiere cumplir RF-12, se desactiva el registro en
   Supabase Auth y se elimina RegisterView.
 
+**Nota de supersesión (2026-10-16):** Esta decisión se revirtió para
+cumplir RF-12. Se eliminaron `RegisterView.vue`, la ruta `/register` y
+el link de registro en `LoginView.vue`, y se desactivó "Allow new users
+to sign up" en Supabase Auth. La justificación #1 de este ADR ("el
+evaluador puede registrarse solo") dejó de aplicar cuando se creó el
+usuario `evaluador@prueba.com` directamente en Supabase. La decisión
+queda registrada aquí como contexto histórico, pero **ya no está
+vigente**. Ver D-16.
+
+
 ## D-15: La API del agente se implementó con FastAPI
 
 **Contexto**: El MVP.md §8 menciona "API de LLM con function calling" como
@@ -735,6 +746,47 @@ las expone.
   en `.env`).
 - **CORS** debe configurarse en FastAPI para permitir
   `http://localhost:5173` (el origen de Vite).
+
+
+## D-16: Cierre del registro público para cumplir RF-12
+
+**Contexto**: El ADR D-14 había decidido mantener registro abierto en el
+MVP, contradiciendo RF-12. Al crear el usuario `evaluador@prueba.com`
+directamente en Supabase, la justificación principal de D-14 ("el
+evaluador puede registrarse solo") dejó de aplicar. Un evaluador AI
+marcó RF-12 como pendiente en el informe de revisión.
+
+**Alternativas consideradas**:
+
+1. Mantener D-14 (no cumplir RF-12).
+2. Cerrar el registro en la UI pero dejar el toggle de Supabase activo.
+3. Cerrar el registro en la UI y desactivar el toggle de Supabase.
+
+**Decisión**: la opción 3.
+
+**Justificación**: RF-12 es un requisito explícito del MVP y la
+justificación funcional de D-14 ya no aplica (el usuario del evaluador
+existe). Cerrar el registro en la UI sin desactivar el toggle de
+Supabase dejaría una puerta trasera (cualquiera podría llamar a la API
+de signup directamente con la anon key). Cerrar las dos cosas es
+coherente y deja el sistema alineado con el requisito.
+
+**Consecuencias**:
+
+- `RegisterView.vue`, la ruta `/register` y el link de registro en
+  `LoginView.vue` se eliminan.
+- "Allow new users to sign up" se desactiva en Supabase Auth.
+- El administrador crea usuarios manualmente desde el dashboard de
+  Supabase o vía `service_role`.
+- El usuario `evaluador@prueba.com` sigue funcionando (fue creado antes
+  del cierre).
+- El registro se puede reactivar en el futuro (revirtiendo estos cambios
+  y volviendo a activar el toggle en Supabase), pero queda fuera del
+  alcance del MVP.
+
+**Implementación**: eliminación de `frontend/src/views/RegisterView.vue`,
+de la ruta en `frontend/src/router/index.js` y del link en
+`frontend/src/views/LoginView.vue`.
 
 ---
 

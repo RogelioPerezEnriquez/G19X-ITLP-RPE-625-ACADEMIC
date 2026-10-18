@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
-import RegisterView from '../views/RegisterView.vue'
 import RecomendacionesView from '../views/RecomendacionesView.vue'
 import RecomendacionDetalleView from '../views/RecomendacionDetalleView.vue'
 import ProveedoresView from '../views/ProveedoresView.vue'
@@ -60,11 +59,6 @@ const router = createRouter({
       name: 'login',
       component: LoginView,
     },
-    {
-      path: '/register',
-      name: 'register',
-      component: RegisterView,
-    },
   ],
 })
 
@@ -87,7 +81,7 @@ router.beforeEach(async (to) => {
   }
 
   // Con sesión activa, las pantallas de acceso no tienen sentido.
-  if (authStore.estaAutenticado && (to.name === 'login' || to.name === 'register')) {
+  if (authStore.estaAutenticado && to.name === 'login') {
     return { name: 'home' }
   }
 
