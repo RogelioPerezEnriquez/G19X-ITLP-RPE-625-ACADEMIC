@@ -38,7 +38,7 @@ import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from supabase import Client, create_client
 
 from src.agente.llm_client import preguntar
@@ -131,6 +131,27 @@ class PreguntaRequest(BaseModel):
 
     pregunta: str
     historial: list[dict] | None = None
+
+    @field_validator("historial")
+    @classmethod
+    def validar_roles_historial(cls, v: list[dict] | None) -> list[dict] | None:
+        """Garantiza que cada mensaje del historial tenga un rol permitido.
+
+        Sin esta validación, un cliente podría inyectar mensajes con rol
+        ``system`` (prompt injection) y alterar las instrucciones del agente.
+
+        Raises:
+            ValueError: si algún mensaje no tiene ``role`` igual a ``user`` o
+                ``assistant``. FastAPI lo traduce a un 422.
+        """
+        if v is not None:
+            for mensaje in v:
+                if mensaje.get("role") not in ("user", "assistant"):
+                    raise ValueError(
+                        "Cada mensaje del historial debe tener un rol "
+                        "'user' o 'assistant'."
+                    )
+        return v
 
 
 class PreguntaResponse(BaseModel):
