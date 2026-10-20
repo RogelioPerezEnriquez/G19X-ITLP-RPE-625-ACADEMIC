@@ -63,23 +63,6 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
         `ahorro.py`.
       - Bajo costo, previene regresiones.
 
-- [ ] **Múltiples recomendaciones por producto** (post-MVP)
-      - La tabla `recomendaciones` no tiene constraint único por
-        `producto_id`, así que cada corrida del pipeline agrega filas.
-      - Las tools del agente devuelven "la más reciente" en los casos
-        de detalle, pero `buscar_recomendaciones` y `resumen_*`
-        cuentan duplicados si hay varias corridas.
-      - Solución a futuro: añadir un campo `activa` (boolean) y filtrar
-        por él, o añadir un constraint único por (producto_id, activa).
-
-- [ ] **Cumplir RF-12: sin registro público** (post-MVP, opcional)
-      - Actualmente el frontend tiene registro abierto (RegisterView).
-      - RF-12 pide "sin registro público de usuarios; las pantallas de
-        login sin opción de registro".
-      - Para cumplir: desactivar el registro en Supabase Auth y
-        eliminar RegisterView + el link en LoginView.
-      - Decisión documentada en docs/decisiones-diseno.md (D-14).
-
 - [ ] **Ajustar el seed para cubrir el estado "Riesgoso"** (opcional)
       - `SEED_RiesgoTotal` tiene valores `(50, 25)` que dan score 60.0
         → "Aceptable con reservas".
@@ -89,20 +72,31 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Requiere recargar el seed + re-ejecutar el pipeline.
       - Hacer al final, si se quiere una demo con los 3 estados.
 
-- [ ] **Reflejar cambios de parámetros en el frontend** (post-MVP, menor)
-      - PARCIALMENTE RESUELTO: el store `proveedores` ya lee
-        `parametros_configuracion` al calcular el estado.
-      - **Aclaración sobre `recomendaciones`**: el store de
-        recomendaciones NO replica la lógica del motor. Solo lee datos
-        ya calculados. Si se cambia un parámetro, los datos en
-        `recomendaciones` siguen siendo los anteriores hasta que se
-        re-ejecute el pipeline (`python scripts/demo_flujo_completo.py`).
-      - Esto es **intencional**: el pipeline es costoso y el
-        administrador quiere revisar los cambios antes.
-      - Mejora futura: agregar un botón "Recalcular" en el frontend que
-        ejecute el pipeline.
-
 ## Resueltos
+
+- [x] **Cumplir RF-12: sin registro público**
+      - Se eliminó `RegisterView.vue`, la ruta `/register` y el enlace
+        en el login y en la barra de navegación.
+      - Se desactivó el registro en Supabase Auth.
+      - Decisión documentada en `docs/decisiones-diseno.md` (D-16).
+
+- [x] **Múltiples recomendaciones por producto**
+      - Se añadió el endpoint `POST /recomendaciones/recalcular` en la
+        API (`backend/src/agente/api.py`) y el botón "Recalcular
+        recomendaciones" en la vista de Configuración.
+      - Antes de insertar las nuevas filas, el pipeline limpia la tabla
+        `recomendaciones` (las evaluaciones se borran en cascada por el
+        `on delete cascade` de `evaluaciones_criterios`), así que ya no
+        se acumulan duplicados entre corridas.
+
+- [x] **Reflejar cambios de parámetros en el frontend**
+      - Resuelto con el mismo endpoint `POST /recomendaciones/recalcular`
+        y el botón "Recalcular recomendaciones": el administrador puede
+        regenerar las recomendaciones y evaluaciones con los parámetros
+        actuales sin ejecutar scripts manualmente.
+      - Se mantiene la decisión de no re-ejecutar el pipeline
+        automáticamente al cambiar un parámetro (es costoso); el
+        recálculo es manual, pero ahora se hace desde la interfaz.
 
 - [x] **Agente conversacional (RF-09, RF-10)**
       - 5 tools de solo lectura en `backend/src/agente/tools.py`.
@@ -184,9 +178,10 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
 - [x] **Acoplamiento de unidades entre `eoq_rop.py` y `ahorro.py`**
       - `recomendador.py` pasa el mismo `periodos_por_año` a ambos módulos.
 
-- [x] **Autenticación con Supabase Auth (parcial)**
+- [x] **Autenticación con Supabase Auth**
       - Login con email/password.
-      - Registro (abierto, ver pendiente sobre RF-12).
+      - Registro cerrado al público (RF-12; ver la entrada resuelta
+        "Cumplir RF-12: sin registro público").
       - Logout.
       - Store `auth` con `user`, `session`, `isAdmin`, `cargando`.
       - Router guards con `meta.requiresAuth` y `meta.requiresAdmin`.

@@ -120,7 +120,7 @@ distribuyen en la plataforma.
 
 ```bash
 git clone <url-del-repo>
-cd OptimizaCompras
+cd G19X-ITLP-RPE-625-ACADEMIC
 ```
 
 ### 2. Configurar variables de entorno
@@ -166,13 +166,17 @@ En el SQL Editor de Supabase, ejecutar en orden:
 
 ### 4. Crear el usuario administrador
 
-1. Registrar un usuario desde el frontend (o desde Supabase Auth).
-2. Obtener su `user_id`.
-3. Insertar en la tabla `admins`:
+Como el registro público está cerrado (RF-12), el primer usuario se crea
+manualmente:
 
-```sql
-INSERT INTO admins (user_id) VALUES ('<uuid-del-usuario>');
-```
+1. En el dashboard de Supabase, ve a **Authentication → Users**.
+2. Pulsa **Add user** → **Create new user**.
+3. Introduce el correo y la contraseña del administrador.
+4. Copia el `User UID` del usuario recién creado.
+5. En el **SQL Editor** de Supabase, ejecuta:
+   ```sql
+   INSERT INTO admins (user_id) VALUES ('<uuid-del-usuario>');
+   ```
 
 ### 5. Instalar dependencias del backend
 
@@ -234,6 +238,18 @@ Vite levanta el servidor en `http://localhost:5173`.
 
 Acceder a `http://localhost:5173` y loguearse con el usuario admin.
 
+### 10. Generar las recomendaciones iniciales
+
+Al arrancar por primera vez, la cola de recomendaciones estará vacía.
+Para generarla:
+
+1. Inicia sesión con una cuenta de administrador.
+2. Ve a la vista de **Configuración**.
+3. Pulsa el botón **Recalcular recomendaciones**.
+
+El sistema ejecutará el motor completo, guardará las recomendaciones y
+las evaluaciones de los 6 criterios. Verás un mensaje de confirmación.
+
 ---
 
 ## Configurabilidad
@@ -274,14 +290,13 @@ reiniciar ni tocar código).
 
 ## Usuario de prueba
 
-Para probar el sistema como administrador:
+Para probar el sistema como administrador, utiliza las credenciales
+asignadas al evaluador. Por seguridad, las credenciales (correo y
+contraseña) **no se publican en el repositorio**; se entregan en
+"Documentos del SGPA" (sección Técnicos → Accesos de prueba) o por el
+canal indicado en la plataforma.
 
-| Campo | Valor |
-|---|---|
-| Email | `evaluador@prueba.com` |
-| Contraseña | `Prueba123` |
-
-**Nota**: este usuario tiene rol de administrador para probar la
+**Nota**: la cuenta entregada tiene rol de administrador para probar la
 pantalla de configuración de parámetros (criterio 8).
 
 ---
@@ -347,13 +362,8 @@ cumplen). Quedan pendientes algunas mejoras opcionales, documentadas en
 
 - **Configurabilidad total**: algunos parámetros (periodos por año,
   margen de seguridad, pesos del score) siguen hardcodeados.
-- **Registro público**: el sistema tiene registro abierto; RF-12 pide
-  "sin registro público".
 - **Seed**: las clases ABC/XYZ calculadas no coinciden exactamente con
   las diseñadas (por estimaciones a ojo de la varianza).
-- **Reflejo automático de parámetros en el frontend**: el store de
-  recomendaciones no re-ejecuta el pipeline al cambiar un parámetro
-  (es manual).
 
 Ver `docs/pendientes.md` para la lista completa.
 
