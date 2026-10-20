@@ -73,7 +73,7 @@ para todos los productos.»
    python -m pytest -q
    ```
 
-   Esperado: `445 passed` (254 de los 445 tests corresponden a los 6
+   Esperado: `451 passed` (254 de los 451 tests corresponden a los 6
    módulos del motor: `abc.py`, `xyz.py`, `demanda.py`, `eoq_rop.py`,
    `proveedor.py`, `ahorro.py`).
 
@@ -98,8 +98,9 @@ para todos los productos.»
   §Notas de integración («Verificación end-to-end exitosa»).
 - Procedimiento reproducible en `docs/verificacion.md` (Niveles 1 y 3).
 - Nota: `docs/verificacion.md` registra 403 tests porque se verificó
-  sobre un commit anterior (`23b134b`, 30/09/2026); la cifra vigente es
-  445 (commit `7d7f942`, `docs/estado-implementacion.md`).
+  sobre un commit anterior (`23b134b`, 30/09/2026); la cifra vigente
+  es 451 (verificado sobre el estado actual de la rama `main`, en
+  `docs/estado-implementacion.md`).
 
 
 ## Criterio 3 — Recomendaciones con los 6 criterios evaluados
@@ -133,7 +134,7 @@ SELECT criterio, count(*) FROM evaluaciones_criterios GROUP BY criterio;
   («Verificación end-to-end completa (recomendador + evaluador): 6
   recomendaciones, 36 evaluaciones»).
 - El evaluador tiene 76 tests (`backend/tests/test_evaluador.py`) dentro
-  de la suite de 445.
+  de la suite de 451.
 
 ## Criterio 4 — Cola de recomendaciones priorizada
 
@@ -216,7 +217,7 @@ manual (`python scripts/verificar_agente_rapido.py`).
   (`backend/src/agente/tools.py`, con `SUPABASE_ANON_KEY`) y toda
   respuesta se basa en el resultado de una función consultada.
 - 24 tests de tools (`backend/tests/test_tools.py`) y 18 del cliente LLM
-  (`backend/tests/test_llm_client.py`) dentro de la suite de 445.
+  (`backend/tests/test_llm_client.py`) dentro de la suite de 451.
 
 ## Criterio 7 — Umbral modificable sin tocar código
 
@@ -313,9 +314,9 @@ más la verificación de las barreras de seguridad en tres capas:
   `frontend/src/views/ConfiguracionView.vue`.
 - Script: `python scripts/verificar_rls.py` (Nivel 2 de
   `docs/verificacion.md`).
-- Ver la observación 2 al final de este documento: la tabla `admins` y
-  la policy `solo_admins_actualizan_parametros` están aplicadas en
-  Supabase pero no versionadas en `db/schema.sql`.
+- La tabla `admins` y la policy `solo_admins_actualizan_parametros` están
+  versionadas en `db/schema.sql` (ver la observación 2 al final de este
+  documento, ya resuelta).
 
 ## Observaciones (contradicciones no bloqueantes detectadas)
 
@@ -331,21 +332,13 @@ más la verificación de las barreras de seguridad en tres capas:
    `docs/pendientes.md`; sería recomendable actualizar
    `docs/estado-implementacion.md` para retirar ese pendiente.
 
-2. **Seguridad de administradores no versionada en el repo.** La tabla
-   `admins` y la policy `solo_admins_actualizan_parametros` (criterio 8)
-   no aparecen en `db/schema.sql` ni en otro SQL del repositorio: según
-   `docs/pendientes.md`, fueron creadas directamente en Supabase.
-   `db/schema.sql` solo contiene las policies de lectura
-   `lectura_anon_authenticated`. El mecanismo existe y está verificado,
-   pero convendría versionar ese SQL para que el esquema sea
-   reproducible desde cero.
-
-3. **Conteos de tests distintos entre documentos.**
-   `docs/verificacion.md` registra 403 tests porque sus cifras se
-   verificaron sobre el commit `23b134b` (30/09/2026); la cifra vigente
-   es 445 (commit `7d7f942`, `docs/estado-implementacion.md`). No es una
-   contradicción: corresponden a commits distintos. Este documento usa
-   la cifra más reciente.
+2. **Seguridad de administradores no versionada en el repo — RESUELTA.**
+   La tabla `admins` y la policy `solo_admins_actualizan_parametros`
+   (criterio 8) ya fueron agregadas a `db/schema.sql`, junto con la
+   policy `usuario_ve_su_propio_admin`, de modo que el esquema es
+   reproducible desde cero. Esta observación correspondía a una versión
+   anterior en la que ese SQL solo existía aplicado directamente en
+   Supabase.
 
 ## Conclusión
 

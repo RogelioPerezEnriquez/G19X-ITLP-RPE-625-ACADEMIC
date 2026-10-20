@@ -64,7 +64,7 @@ Cifras y salidas de este documento verificadas sobre el commit `23b134b`
 
 Verifica la lógica pura del sistema sin tocar red ni base de datos: los tests
 inyectan DataFrames sintéticos y (para la configurabilidad) un cliente falso de
-Supabase. Es el nivel más rápido (unos 4 o 5 segundos los 445 tests) y el que
+Supabase. Es el nivel más rápido (unos 4 o 5 segundos los 451 tests) y el que
 conviene correr después de cualquier cambio antes de gastar una corrida contra
 Supabase.
 
@@ -91,17 +91,17 @@ Notas sobre el directorio:
 La última línea debe ser del tipo:
 
 ```text
-445 passed in ~6s
+451 passed in ~6s
 ```
 
-Concretamente: **445 tests pasando, 0 fallos, 0 skips**. Si aparece cualquier
+Concretamente: **451 tests pasando, 0 fallos, 0 skips**. Si aparece cualquier
 `failed`, `error` o `skipped`, el nivel no está aprobado.
 
 ### Qué verifica
 
 - La lógica de los 6 módulos del motor OR (`backend/src/motor/`): ABC, XYZ,
   estimación de demanda, EOQ/ROP, score de proveedor y oportunidad de ahorro.
-  254 de los 445 tests son de estos módulos.
+  254 de los 451 tests son de estos módulos.
 - El recomendador (`backend/src/recomendador.py`), con DataFrames sintéticos:
   orquestación de los módulos, elección de proveedor y fronteras de urgencia.
 - El evaluador (`backend/src/evaluador.py`), con DataFrames sintéticos: la
@@ -539,7 +539,7 @@ cambian.
 
 | Nivel | Requisitos | Comando | Resultado |
 |---|---|---|---|
-| 1. Tests | Instalado | `python -m pytest -q` (desde `backend/`) | 445 pasando |
+| 1. Tests | Instalado | `python -m pytest -q` (desde `backend/`) | 451 pasando |
 | 2. Entorno | `.env`, Supabase, LLM | `python scripts/verificar_rls.py`, `verificar_service_role.py`, `verificar_zai.py` | 3 scripts OK |
 | 3. End-to-end | Seed cargado, `.env` | `python scripts/demo_flujo_completo.py` | 6 recomendaciones, 36 evaluaciones |
 | 4. Configurabilidad | SQL Editor, `.env`, seed | `UPDATE` + demo (Pruebas 1 y 2) | Cambios coherentes y restaurados |
@@ -547,14 +547,16 @@ cambian.
 
 **Estado al escribir este documento** (commit `23b134b`): los niveles 1 y 3 se
 corrieron en vivo, con el resultado de la tabla de referencia del Nivel 3
-(445 pasando, 6 recomendaciones, Atención 1, Sin riesgo 5, Crítico 0, 2 con
+(451 pasando, 6 recomendaciones, Atención 1, Sin riesgo 5, Crítico 0, 2 con
 "Ahorro detectado", suma $1,869.75) y sin escribir nada en Supabase
 (`recomendaciones` seguía en 0 filas). Los niveles 2, 4 y 5 quedan como
 procedimiento reproducible; su última corrida exitosa está registrada en
 `docs/pendientes.md` ("Notas de integración") y `docs/estado-implementacion.md`
 (verificación end-to-end de configurabilidad y métricas).
 
-Si los cinco niveles pasan, el sistema está verificado en su estado actual. Lo
-que falta construir (agente conversacional, frontend y script de ingesta) no
-tiene verificación todavía: su estado está en `docs/estado-implementacion.md` y la
-deuda técnica abierta en `docs/pendientes.md`.
+Si los cinco niveles pasan, el sistema está verificado en su estado actual.
+Todos los componentes del MVP (motor, recomendador, evaluador, agente
+conversacional, frontend y script de ingesta) están construidos y
+verificados: la verificación de los 8 criterios de aceptación está en
+`docs/verificacion-final.md` y la deuda técnica abierta en
+`docs/pendientes.md`.

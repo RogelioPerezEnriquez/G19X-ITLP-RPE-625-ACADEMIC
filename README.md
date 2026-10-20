@@ -71,8 +71,9 @@ funciona con cualquier dataset que respete el esquema de `db/schema.sql`.
 │   │   ├── ingesta/             Script de ingesta CSV/Excel
 │   │   ├── config.py            Carga de parámetros de configuración
 │   │   ├── recomendador.py      Orquestador del motor
-│   │   └── evaluador.py         Rúbrica de 6 criterios
-│   ├── tests/                   Suite de tests (pytest)
+│   │   ├── evaluador.py         Rúbrica de 6 criterios
+│   │   └── pipeline.py          Flujo completo de recálculo sin interacción (API)
+│   ├── tests/                   Suite de tests (pytest, 12 archivos)
 │   └── requirements.txt
 ├── frontend/                    Interfaz de usuario (Vue 3)
 │   ├── src/
@@ -119,7 +120,7 @@ distribuyen en la plataforma.
 ### 1. Clonar el repositorio
 
 ```bash
-git clone <url-del-repo>
+git clone https://github.com/RogelioPerezEnriquez/G19X-ITLP-RPE-625-ACADEMIC.git
 cd G19X-ITLP-RPE-625-ACADEMIC
 ```
 
@@ -166,8 +167,13 @@ En el SQL Editor de Supabase, ejecutar en orden:
 
 ### 4. Crear el usuario administrador
 
-Como el registro público está cerrado (RF-12), el primer usuario se crea
-manualmente:
+**Si eres el evaluador**, no necesitas crear ningún usuario: la cuenta de
+administrador ya está creada en Supabase y las credenciales se entregan
+por el canal indicado en la plataforma (ver la sección «Usuario de
+prueba» más abajo). Puedes saltar al paso 5.
+
+**Si instalas el proyecto desde cero**, como el registro público está
+cerrado (RF-12), el primer usuario administrador se crea manualmente:
 
 1. En el dashboard de Supabase, ve a **Authentication → Users**.
 2. Pulsa **Add user** → **Create new user**.
@@ -211,7 +217,7 @@ cd backend
 python -m pytest -q
 ```
 
-Todos los tests deben pasar.
+Esperado: 451 tests pasando.
 
 Ver `docs/verificacion.md` para la guía completa de verificación.
 
