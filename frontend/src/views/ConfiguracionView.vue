@@ -1,12 +1,22 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { supabase } from '../services/supabase'
 import { useAuthStore } from '../stores/auth'
 import { useConfiguracionStore } from '../stores/configuracion'
+import { useRecomendacionesStore } from '../stores/recomendaciones'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const configuracionStore = useConfiguracionStore()
+const recomendacionesStore = useRecomendacionesStore()
+
+// URL base del backend FastAPI (mismo criterio que el store del chat).
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+const recalculando = ref(false)
+const mensajeRecalculo = ref('')
+const errorRecalculo = ref('')
 
 // Formato español para mostrar el valor persistido (p. ej. 0,5). Los inputs
 // usan el formato estándar de HTML5 number (punto decimal).
@@ -93,6 +103,49 @@ async function guardar() {
 
 function cancelar() {
   configuracionStore.descartarCambios()
+}
+
+async function recalcular() {
+  const confirmado = confirm(
+    'Esto borrará todas las recomendaciones y evaluaciones actuales y las regenerará. ¿Continuar?'
+  )
+  if (!confirmado) return
+
+  recalculando.value = true
+  mensajeRecalculo.value = ''
+  errorRecalculo.value = ''
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session) {
+      throw new Error('Tu sesión expiró. Inicia sesión de nuevo.')
+    }
+
+    const response = await fetch(`${API_URL}/recomendaciones/recalcular`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.detail || 'Error al recalcular.')
+    }
+
+    const data = await response.json()
+    mensajeRecalculo.value = data.mensaje || 'Recálculo completado.'
+
+    // Recargar la cola de recomendaciones con los datos regenerados.
+    await recomendacionesStore.listar()
+  } catch (error) {
+    errorRecalculo.value = error.message || 'Error al recalcular.'
+  } finally {
+    recalculando.value = false
+  }
 }
 
 onMounted(() => {
@@ -210,6 +263,20 @@ onMounted(() => {
         {{ configuracionStore.exito }}
       </div>
 
+      <div
+        v-if="mensajeRecalculo"
+        class="mt-4 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700"
+      >
+        {{ mensajeRecalculo }}
+      </div>
+
+      <div
+        v-if="errorRecalculo"
+        class="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+      >
+        {{ errorRecalculo }}
+      </div>
+
       <div class="mt-6 flex items-center justify-end gap-3">
         <span v-if="configuracionStore.guardando" class="text-sm text-gray-600">
           Guardando...
@@ -228,6 +295,15 @@ onMounted(() => {
           :disabled="!puedeGuardar"
         >
           Guardar cambios
+        </button>
+        <button
+          type="button"
+          class="rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="recalculando || configuracionStore.hayCambios || configuracionStore.guardando"
+          @click="recalcular"
+          title="Regenera las recomendaciones y evaluaciones con los parámetros actuales"
+        >
+          {{ recalculando ? 'Recalculando...' : 'Recalcular recomendaciones' }}
         </button>
       </div>
     </form>

@@ -16,6 +16,9 @@ Endpoints
 * ``POST /agente/preguntar``: envía una pregunta al agente y devuelve la
   respuesta junto con el historial actualizado de la conversación. Requiere un
   token de Supabase válido en el header ``Authorization``.
+* ``POST /recomendaciones/recalcular``: ejecuta el pipeline completo
+  (:func:`src.pipeline.ejecutar_pipeline_completo`) y devuelve los conteos de
+  recomendaciones y evaluaciones generadas. Requiere token y rol de admin.
 
 Manejo de errores
 -----------------
@@ -39,11 +42,17 @@ from pydantic import BaseModel
 from supabase import Client, create_client
 
 from src.agente.llm_client import preguntar
+from src.pipeline import ejecutar_pipeline_completo
 
 logger = logging.getLogger(__name__)
 
-#: Origen del frontend (Vite dev server).
-ORIGEN_FRONTEND: str = "http://localhost:5173"
+#: Orígenes permitidos para el frontend (Vite dev server).
+#: Incluye localhost y 127.0.0.1 porque Vite puede levantar en cualquiera
+#: de los dos y el navegador los trata como orígenes distintos.
+ORIGENES_PERMITIDOS: list[str] = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
 
 
 def _crear_cliente_supabase() -> Client:
@@ -137,14 +146,31 @@ class PreguntaResponse(BaseModel):
     historial: list[dict]
 
 
+class RecalcularResponse(BaseModel):
+    """Respuesta de ``POST /recomendaciones/recalcular``.
+
+    Attributes:
+        recomendaciones_generadas: cantidad de recomendaciones que generó y
+            guardó el pipeline.
+        evaluaciones_generadas: cantidad de evaluaciones de criterios que
+            generó y guardó el pipeline (6 por recomendación).
+        mensaje: resumen legible del resultado para mostrar en el frontend.
+    """
+
+    recomendaciones_generadas: int
+    evaluaciones_generadas: int
+    mensaje: str
+
+
 app = FastAPI(title="API del Agente", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[ORIGEN_FRONTEND],
+    allow_origins=ORIGENES_PERMITIDOS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -191,3 +217,87 @@ def preguntar_endpoint(
         respuesta=respuesta,
         historial=historial_actualizado,
     )
+
+
+@app.post("/recomendaciones/recalcular", response_model=RecalcularResponse)
+def recalcular_endpoint(
+    usuario: dict = Depends(_dependencia_usuario),
+) -> RecalcularResponse:
+    """Ejecuta el pipeline completo de recomendaciones y evaluaciones.
+
+    Requiere autenticación. Solo administradores pueden ejecutarlo. El
+    pipeline borra las recomendaciones actuales (y, en cascada, sus
+    evaluaciones) y las regenera con los parámetros vigentes de
+    ``parametros_configuracion``.
+
+    Raises:
+        HTTPException(401): si el token falta o es inválido.
+        HTTPException(403): si el usuario no es admin.
+        HTTPException(500): si el pipeline falla.
+    """
+    # 1. Crear el cliente con service_role. Las tablas que toca este endpoint
+    # (`admins`, `recomendaciones`, `evaluaciones_criterios`) tienen RLS con
+    # políticas restrictivas; el cliente anon no tiene `auth.uid()` establecido
+    # y la policy "usuario_ve_su_propio_admin" devolvería 0 filas, así que la
+    # verificación de admin también debe hacerse con service_role (ignora RLS).
+    url = os.environ.get("SUPABASE_URL")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not service_key:
+        logger.error(
+            "Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY para recalcular."
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno de configuración del servidor.",
+        )
+
+    try:
+        supabase_admin = create_client(url, service_key)
+    except Exception as e:
+        logger.exception("Error al crear cliente service_role para recalcular")
+        raise HTTPException(
+            status_code=500, detail="Error interno al crear el cliente."
+        ) from e
+
+    # 2. Verificar que el usuario es admin usando service_role.
+    try:
+        respuesta = (
+            supabase_admin.table("admins")
+            .select("user_id")
+            .eq("user_id", usuario["id"])
+            .execute()
+        )
+    except Exception as e:
+        logger.exception(
+            "Error al verificar admin para %s", usuario.get("email")
+        )
+        raise HTTPException(
+            status_code=500, detail="Error interno al verificar permisos."
+        ) from e
+    if not respuesta.data:
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden recalcular."
+        )
+
+    # 3. Ejecutar el pipeline con el mismo cliente service_role.
+    try:
+        resultado = ejecutar_pipeline_completo(supabase_admin)
+    except Exception as e:
+        logger.exception(
+            "Error al recalcular el pipeline para %s", usuario.get("email")
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno al recalcular. Intenta de nuevo más tarde.",
+        ) from e
+
+    return RecalcularResponse(
+        recomendaciones_generadas=resultado["recomendaciones_generadas"],
+        evaluaciones_generadas=resultado["evaluaciones_generadas"],
+        mensaje=(
+            f"Se generaron {resultado['recomendaciones_generadas']} "
+            f"recomendaciones y {resultado['evaluaciones_generadas']} "
+            f"evaluaciones."
+        ),
+    )
+
