@@ -117,6 +117,32 @@ distribuyen en la plataforma.
 
 ## Setup
 
+### Requisitos previos
+
+Antes de comenzar, asegúrate de tener instalado:
+
+- **Python 3.11 o superior**: descárgalo de
+  [python.org](https://www.python.org/downloads/).
+  *⚠️ En Windows, es **muy importante** marcar la casilla "Add python.exe
+  to PATH" durante la instalación.*
+- **Node.js 20.19+ o 22.12+**: descárgalo de
+  [nodejs.org](https://nodejs.org/).
+  *⚠️ Vite requiere esta versión mínima. Si usas una versión anterior
+  (como Node 18 o 20.10), verás un error al correr `npm run dev`.*
+- **Git**: descárgalo de [git-scm.com](https://git-scm.com/).
+
+Para verificar que están instalados correctamente, abre una terminal y
+ejecuta:
+
+```bash
+python --version
+node --version
+git --version
+```
+
+Si alguno de estos comandos da un error de "término no reconocido",
+significa que no está instalado o no se agregó al PATH del sistema.
+
 ### 1. Clonar el repositorio
 
 ```bash
@@ -188,8 +214,11 @@ cerrado (RF-12), el primer usuario administrador se crea manualmente:
 
 ```bash
 cd backend
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
+
+**Nota**: usar `python -m pip` garantiza que las dependencias se instalen
+en el Python correcto si tienes varias versiones instaladas.
 
 ### 6. Instalar dependencias del frontend
 
@@ -372,6 +401,52 @@ cumplen). Quedan pendientes algunas mejoras opcionales, documentadas en
   las diseñadas (por estimaciones a ojo de la varianza).
 
 Ver `docs/pendientes.md` para la lista completa.
+
+---
+
+## Si algo no funciona
+
+Los problemas más comunes al instalar el proyecto desde cero y cómo
+resolverlos:
+
+**Error: `No module named 'dotenv'` o similar al correr el backend**
+
+Significa que las dependencias no se instalaron en el Python correcto.
+Ejecuta `python -m pip install -r requirements.txt` dentro de la carpeta
+`backend/` para asegurarte de usar el mismo Python que ejecutará los
+scripts.
+
+**Error en Windows: `npm : No se puede cargar el archivo ... npm.ps1
+porque la ejecución de scripts está deshabilitada`**
+
+Es una restricción de seguridad de PowerShell. Tienes dos opciones:
+
+1. Cambiar la terminal de VS Code a "Command Prompt" (CMD).
+2. O ejecutar en PowerShell:
+   `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+   (y confirmar con "S").
+
+**Error: `Cannot find native binding` al correr `npm run dev`**
+
+Es un bug conocido de `npm` con las dependencias opcionales de
+`rolldown` (la herramienta de compilación de Vite). La solución es
+forzar una reinstalación limpia:
+
+1. Dentro de `frontend/`, borra la carpeta `node_modules` y el archivo
+   `package-lock.json`.
+2. Ejecuta `npm install` de nuevo.
+3. Prueba `npm run dev`.
+
+Si persiste, actualiza `npm` con `npm install -g npm@latest` y repite
+los pasos.
+
+**El frontend no conecta con la API**
+
+Verifica que el archivo `.env` tenga la variable
+`VITE_API_URL=http://localhost:8000` y que el servidor de FastAPI esté
+corriendo en la terminal 1.
+
+---
 
 ## Licencia
 
