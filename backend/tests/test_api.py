@@ -14,7 +14,9 @@ Los tests que verifican el 401 **no** usan el override: quieren probar
 precisamente que la dependencia rechaza la petición.
 """
 
-from unittest.mock import patch
+import os
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -169,3 +171,110 @@ def test_preguntar_error_agente_devuelve_500_generico(
         "Error interno al consultar el agente. Intenta de nuevo más tarde."
     )
     assert detalle_secreto not in respuesta.text
+
+
+# ==================================== POST /recomendaciones/recalcular
+#
+# Estos tests prueban el endpoint de recálculo sin tocar Supabase ni el
+# motor real:
+#
+# * ``create_client`` se parchea para devolver un ``MagicMock`` cuya cadena
+#   ``table("admins").select(...).eq(...).execute()`` devuelve una respuesta
+#   con ``data`` controlada por el test (vacía = no admin).
+# * ``ejecutar_pipeline_completo`` se parchea para simular el éxito o el
+#   fallo del pipeline.
+# * Las variables de entorno ``SUPABASE_URL``/``SUPABASE_SERVICE_ROLE_KEY``
+#   se fijan con ``patch.dict`` porque el endpoint las exige.
+
+
+def _cliente_supabase_mock(*, es_admin: bool) -> MagicMock:
+    """Cliente Supabase falso para el endpoint de recálculo.
+
+    La consulta a la tabla ``admins`` devuelve una fila si ``es_admin`` es
+    verdadero y una lista vacía en caso contrario.
+    """
+    cliente = MagicMock()
+    datos = [{"user_id": "user-de-prueba"}] if es_admin else []
+    (
+        cliente.table.return_value.select.return_value.eq
+        .return_value.execute.return_value
+    ) = SimpleNamespace(data=datos)
+    return cliente
+
+
+def _entorno_supabase() -> dict:
+    """Variables de entorno mínimas que exige el endpoint de recálculo."""
+    return {
+        "SUPABASE_URL": "https://supabase-de-prueba.local",
+        "SUPABASE_SERVICE_ROLE_KEY": "service-role-key-de-prueba",
+    }
+
+
+def test_recalcular_sin_token_devuelve_401(client):
+    """Sin header ``Authorization`` el recálculo se rechaza con 401."""
+    respuesta = client.post("/recomendaciones/recalcular")
+
+    assert respuesta.status_code == 401
+
+
+def test_recalcular_usuario_no_admin_devuelve_403(client_autenticado):
+    """Un usuario autenticado que no está en ``admins`` recibe 403."""
+    with (
+        patch.dict(os.environ, _entorno_supabase()),
+        patch(
+            "src.agente.api.create_client",
+            return_value=_cliente_supabase_mock(es_admin=False),
+        ),
+    ):
+        respuesta = client_autenticado.post("/recomendaciones/recalcular")
+
+    assert respuesta.status_code == 403
+    assert "administradores" in respuesta.json()["detail"]
+
+
+def test_recalcular_pipeline_fallido_devuelve_500_generico(client_autenticado):
+    """Si el pipeline lanza una excepción se devuelve 500 genérico.
+
+    El detalle de la excepción original no debe filtrarse al cliente.
+    """
+    detalle_secreto = "conexión rechazada: service_key=sk-secreto-12345"
+    with (
+        patch.dict(os.environ, _entorno_supabase()),
+        patch(
+            "src.agente.api.create_client",
+            return_value=_cliente_supabase_mock(es_admin=True),
+        ),
+        patch(
+            "src.agente.api.ejecutar_pipeline_completo",
+            side_effect=RuntimeError(detalle_secreto),
+        ),
+    ):
+        respuesta = client_autenticado.post("/recomendaciones/recalcular")
+
+    assert respuesta.status_code == 500
+    assert respuesta.json()["detail"] == (
+        "Error interno al recalcular. Intenta de nuevo más tarde."
+    )
+    assert detalle_secreto not in respuesta.text
+
+
+def test_recalcular_admin_devuelve_200_con_conteos(client_autenticado):
+    """Un admin obtiene 200 con los conteos devueltos por el pipeline."""
+    conteos = {"recomendaciones_generadas": 6, "evaluaciones_generadas": 36}
+    with (
+        patch.dict(os.environ, _entorno_supabase()),
+        patch(
+            "src.agente.api.create_client",
+            return_value=_cliente_supabase_mock(es_admin=True),
+        ),
+        patch(
+            "src.agente.api.ejecutar_pipeline_completo",
+            return_value=conteos,
+        ),
+    ):
+        respuesta = client_autenticado.post("/recomendaciones/recalcular")
+
+    assert respuesta.status_code == 200
+    cuerpo = respuesta.json()
+    assert cuerpo["recomendaciones_generadas"] == 6
+    assert cuerpo["evaluaciones_generadas"] == 36

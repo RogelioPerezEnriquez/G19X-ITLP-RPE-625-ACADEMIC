@@ -10,10 +10,14 @@ A diferencia del script, aquí no hay ``input()``, ``print()`` ni ``sys.exit()``
 la función hace el trabajo y devuelve los conteos, y cualquier error se propaga
 tal cual para que el llamador (el endpoint de la API) decida cómo reportarlo.
 
-La limpieza es un solo ``DELETE`` sobre ``recomendaciones``: la tabla
-``evaluaciones_criterios`` declara su clave foránea hacia ``recomendaciones``
-con ``on delete cascade`` (ver ``db/schema.sql``), así que las evaluaciones
-asociadas se borran en cascada y no hay que eliminarlas a mano.
+La limpieza es un solo ``DELETE`` sobre ``recomendaciones`` filtrado por
+``estado = 'pendiente'``: se hace DESPUÉS de generar las recomendaciones en
+memoria, así que si el motor falla la tabla queda intacta. Solo se borran las
+pendientes; las marcadas como ``revisada`` o ``descartada`` ya fueron
+evaluadas por un usuario y se conservan. La tabla ``evaluaciones_criterios``
+declara su clave foránea hacia ``recomendaciones`` con ``on delete cascade``
+(ver ``db/schema.sql``), así que las evaluaciones de las filas borradas se
+eliminan en cascada y no hay que eliminarlas a mano.
 
 El cliente de Supabase que recibe :func:`ejecutar_pipeline_completo` debe estar
 creado con la ``service_role key``: las tablas que escribe el flujo tienen RLS
@@ -33,15 +37,15 @@ TABLA_RECOMENDACIONES: str = "recomendaciones"
 # verdad del evaluador) en lugar de escribir un 6 a mano.
 EVALUACIONES_POR_RECOMENDACION: int = len(ORDEN_CRITERIOS)
 
-# UUID nulo usado como filtro del DELETE: PostgREST exige al menos un filtro en
-# los DELETE, y ``id != <uuid nulo>`` es la forma de decir "todas las filas".
-_UUID_NULO: str = "00000000-0000-0000-0000-000000000000"
-
-
-
 def ejecutar_pipeline_completo(supabase_client) -> dict:
-    """Ejecuta el pipeline completo: limpia, genera, guarda, cruza UUIDs
-    y evalúa los 6 criterios.
+    """Ejecuta el pipeline completo: genera, limpia pendientes, guarda,
+    cruza UUIDs y evalúa los 6 criterios.
+
+    El orden importa: primero se generan las recomendaciones en memoria y
+    solo después se borran las filas pendientes de la tabla. Si el motor
+    falla (o no genera nada), se aborta antes del DELETE y la tabla queda
+    intacta: no se pierden las recomendaciones vigentes ni los estados
+    ``revisada``/``descartada`` que el usuario ya definió.
 
     Args:
         supabase_client: cliente de Supabase con service_role key.
@@ -52,21 +56,27 @@ def ejecutar_pipeline_completo(supabase_client) -> dict:
         - "evaluaciones_generadas": int (cantidad)
 
     Raises:
-        Exception: cualquier error de Supabase, del motor o del evaluador
-            se propaga tal cual.
-        ValueError: si el cruce de UUIDs no cuadra (ver :func:`_cruzar_uuid`).
+        ValueError: si el motor no generó ninguna recomendación (se aborta
+            antes de borrar nada) o si el cruce de UUIDs no cuadra
+            (ver :func:`_cruzar_uuid`).
+        Exception: cualquier otro error de Supabase, del motor o del
+            evaluador se propaga tal cual.
     """
-    # Paso 1: limpiar la tabla. El `on delete cascade` de
-    # `evaluaciones_criterios.recomendacion_id` borra las evaluaciones
-    # asociadas, así que no hay que tocar esa tabla.
-    supabase_client.table(TABLA_RECOMENDACIONES).delete().neq(
-        "id", _UUID_NULO
-    ).execute()
-
-    # Paso 2: generar las recomendaciones con el motor OR.
+    # Paso 1: generar las recomendaciones con el motor OR. Todo ocurre en
+    # memoria: todavía no se toca la base de datos, así que un fallo aquí
+    # no deja la tabla vacía.
     recomendaciones: pd.DataFrame = generar_recomendaciones(supabase_client)
     if recomendaciones.empty:
-        return {"recomendaciones_generadas": 0, "evaluaciones_generadas": 0}
+        raise ValueError("El motor no generó recomendaciones.")
+
+    # Paso 2: limpiar la tabla. Solo se borran las filas pendientes: las
+    # marcadas como 'revisada' o 'descartada' ya fueron evaluadas por un
+    # usuario y se conservan. El `on delete cascade` de
+    # `evaluaciones_criterios.recomendacion_id` borra las evaluaciones de
+    # las pendientes eliminadas, así que no hay que tocar esa tabla.
+    supabase_client.table(TABLA_RECOMENDACIONES).delete().eq(
+        "estado", "pendiente"
+    ).execute()
 
     # Paso 3: guardarlas (Supabase devuelve las filas insertadas con su UUID).
     guardadas: pd.DataFrame = guardar_recomendaciones(

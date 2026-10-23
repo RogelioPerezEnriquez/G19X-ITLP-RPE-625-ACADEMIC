@@ -19,8 +19,6 @@ const ERRORES_AUTH_ES = [
   ['password should be at least', 'La contraseña debe tener al menos 6 caracteres.'],
   ['unable to validate email address', 'El email no tiene un formato válido.'],
   ['email rate limit exceeded', 'Demasiados intentos. Espera unos minutos y vuelve a probar.'],
-  ['signups not allowed', 'El registro de usuarios está deshabilitado.'],
-  ['signup is disabled', 'El registro de usuarios está deshabilitado.'],
   ['user not found', 'No existe una cuenta con ese email.'],
   ['auth session missing', 'No hay una sesión activa.'],
   ['failed to fetch', 'No se pudo conectar con el servidor. Revisa tu conexión.'],
@@ -121,26 +119,6 @@ export const useAuthStore = defineStore('auth', {
           email,
           password,
         })
-        if (error) return { ok: false, error: traducirErrorAuth(error) }
-
-        this.session = data.session ?? null
-        this.user = data.user ?? null
-        await this.cargarAdmin()
-        return { ok: true }
-      } catch (error) {
-        return { ok: false, error: traducirErrorAuth(error) }
-      }
-    },
-
-    /**
-     * Registra un usuario nuevo. Con la confirmación por email desactivada,
-     * Supabase devuelve la sesión en la misma respuesta, así que el usuario
-     * queda logueado inmediatamente.
-     * Devuelve `{ ok: true }` o `{ ok: false, error }`.
-     */
-    async signup(email, password) {
-      try {
-        const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) return { ok: false, error: traducirErrorAuth(error) }
 
         this.session = data.session ?? null

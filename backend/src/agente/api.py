@@ -247,9 +247,9 @@ def recalcular_endpoint(
     """Ejecuta el pipeline completo de recomendaciones y evaluaciones.
 
     Requiere autenticación. Solo administradores pueden ejecutarlo. El
-    pipeline borra las recomendaciones actuales (y, en cascada, sus
-    evaluaciones) y las regenera con los parámetros vigentes de
-    ``parametros_configuracion``.
+    pipeline genera primero las recomendaciones en memoria y después borra
+    las pendientes (conservando las revisadas y descartadas), de modo que
+    un fallo del motor no deja la tabla vacía.
 
     Raises:
         HTTPException(401): si el token falta o es inválido.

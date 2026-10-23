@@ -107,7 +107,7 @@ function cancelar() {
 
 async function recalcular() {
   const confirmado = confirm(
-    'Esto borrará todas las recomendaciones y evaluaciones actuales y las regenerará. ¿Continuar?'
+    'Se borrarán las recomendaciones pendientes (y sus evaluaciones) y se regenerarán. Las revisadas y descartadas se conservan. ¿Continuar?'
   )
   if (!confirmado) return
 
