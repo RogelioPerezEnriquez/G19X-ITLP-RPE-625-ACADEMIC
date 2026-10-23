@@ -223,8 +223,9 @@ en el Python correcto si tienes varias versiones instaladas.
 ### 6. Instalar dependencias del frontend
 
 ```bash
-cd frontend
+cd ../frontend
 npm install
+cd ..
 ```
 
 ### 7. Verificar el entorno
@@ -246,7 +247,7 @@ cd backend
 python -m pytest -q
 ```
 
-Esperado: 451 tests pasando.
+Esperado: 455 tests pasando.
 
 Ver `docs/verificacion.md` para la guía completa de verificación.
 
