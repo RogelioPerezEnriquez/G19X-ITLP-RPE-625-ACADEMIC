@@ -127,6 +127,9 @@ export const useRecomendacionesStore = defineStore('recomendaciones', {
         const { data, error } = await supabase
           .from('recomendaciones')
           .select('*, productos(nombre, stock_actual), proveedores(nombre)')
+          // Solo las pendientes: las 'revisada' y 'descartada' se conservan
+          // como historial y no deben aparecer en la cola principal.
+          .eq('estado', 'pendiente')
 
         if (error) throw error
 

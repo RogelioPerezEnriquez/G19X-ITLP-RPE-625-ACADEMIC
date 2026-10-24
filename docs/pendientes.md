@@ -84,10 +84,14 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Se añadió el endpoint `POST /recomendaciones/recalcular` en la
         API (`backend/src/agente/api.py`) y el botón "Recalcular
         recomendaciones" en la vista de Configuración.
-      - Antes de insertar las nuevas filas, el pipeline limpia la tabla
-        `recomendaciones` (las evaluaciones se borran en cascada por el
-        `on delete cascade` de `evaluaciones_criterios`), así que ya no
-        se acumulan duplicados entre corridas.
+      - El recálculo borra solo las recomendaciones con estado
+        `pendiente` (sus evaluaciones se borran en cascada por el
+        `on delete cascade` de `evaluaciones_criterios`).
+      - Las recomendaciones `revisada` y `descartada` se conservan como
+        historial: el trabajo del usuario no se pierde al recalcular.
+      - El frontend (`stores/recomendaciones.js`) filtra la cola
+        principal para mostrar solo las `pendiente`, evitando duplicados
+        visuales cuando un producto tiene una versión vieja revisada.
 
 - [x] **Reflejar cambios de parámetros en el frontend**
       - Resuelto con el mismo endpoint `POST /recomendaciones/recalcular`

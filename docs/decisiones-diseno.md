@@ -40,6 +40,7 @@ transversal. Cada decisión cierra con su implementación de referencia
 - **D-14** — Registro público abierto en el MVP (contradice RF-12)
 - **D-15** — La API del agente se implementó con FastAPI
 - **D-16** — Cierre del registro público para cumplir RF-12
+- **D-17** — Borrado selectivo en el recálculo de recomendaciones
 
 
 ---
@@ -787,6 +788,20 @@ coherente y deja el sistema alineado con el requisito.
 **Implementación**: eliminación de `frontend/src/views/RegisterView.vue`,
 de la ruta en `frontend/src/router/index.js` y del link en
 `frontend/src/views/LoginView.vue`.
+
+---
+
+## D-17: Borrado selectivo en el recálculo de recomendaciones
+
+**Contexto**: El recálculo original (`pipeline.py`) hacía un `DELETE` total de la tabla `recomendaciones` antes de insertar las nuevas. Esto causaba dos problemas: si el motor fallaba, la tabla quedaba vacía; y se perdía el trabajo del usuario que ya había marcado recomendaciones como 'revisada' o 'descartada'.
+
+**Decisión**:
+1. El pipeline genera las nuevas recomendaciones en memoria primero.
+2. Si el motor falla, la tabla original queda intacta.
+3. El `DELETE` en base de datos filtra por `estado = 'pendiente'`, conservando las 'revisada' y 'descartada'.
+4. El frontend (`recomendaciones.js`) filtra la cola principal para mostrar solo las 'pendiente', evitando que un producto aparezca duplicado si tiene una versión vieja revisada.
+
+**Consecuencias**: El sistema conserva el historial de lo que el usuario ya evaluó. La cola de recomendaciones se mantiene limpia. El endpoint de recálculo ya no deja la tabla vacía si ocurre un error a mitad del proceso.
 
 ---
 
