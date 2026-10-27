@@ -7,6 +7,11 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
 
 ## Deuda técnica
 
+- [ ] **Ciclo de vida de recomendaciones (post-MVP)**
+      - La base de datos y el pipeline (`D-17`) están preparados para conservar recomendaciones en estado 'revisada' o 'descartada'.
+      - Sin embargo, la interfaz de usuario actual no incluye botones ni endpoints para cambiar el estado de una recomendación.
+      - Queda fuera del alcance del MVP, pero se puede implementar fácilmente añadiendo un endpoint `PUT /recomendaciones/:id/estado` y botones en `RecomendacionDetalleView.vue`.
+
 - [ ] **Configurabilidad completa de parámetros** (post-MVP)
       - La tabla `parametros_configuracion` tiene 10 filas.
         Los parámetros configurables son: `abc_clase_a_pct`, `abc_clase_b_pct`,

@@ -69,7 +69,11 @@ export const useKpisStore = defineStore('kpis', {
         const [resultadoRecomendaciones, resultadoAhorro] = await Promise.all([
           supabase
             .from('recomendaciones')
-            .select('*, productos(nombre, stock_actual)'),
+            .select('*, productos(nombre, stock_actual)')
+            // Solo las pendientes: igual que en recomendaciones.js, las
+            // 'revisada' y 'descartada' son historial y no deben contarse
+            // en los KPIs (evita duplicados si hay estados mixtos).
+            .eq('estado', 'pendiente'),
           supabase
             .from('evaluaciones_criterios')
             .select('id', { count: 'exact', head: true })

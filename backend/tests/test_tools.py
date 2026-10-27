@@ -2,8 +2,8 @@
 
 Se prueba cada una de las cinco tools de ``src.agente.tools`` contra un cliente
 de Supabase falso **en memoria**: no se toca red, base de datos ni archivos. El
-cliente solo implementa ``table(...).select(...).execute()``, que es el único
-acceso a datos que usan las tools (todas son de solo lectura).
+cliente solo implementa ``table(...).select(...).eq(...).execute()``, que es el
+único acceso a datos que usan las tools (todas son de solo lectura).
 
 Los datos de prueba son pequeños y de reglas conocidas: tres productos (uno por
 franja de urgencia), tres proveedores (con un empate de score para el desempate
@@ -35,22 +35,31 @@ class _RespuestaFalsa:
 
 
 class _TablaFalsa:
-    """Constructor de consultas mínimo: ``select(...).execute()``."""
+    """Constructor de consultas mínimo: ``select(...).eq(...).execute()``."""
 
     def __init__(self, cliente: "_ClienteFalso", nombre: str) -> None:
         self._cliente = cliente
         self._nombre = nombre
+        self._filtros: list[tuple[str, object]] = []
 
     def select(self, columnas: str) -> "_TablaFalsa":
         """Registra la consulta (tabla + columnas) y devuelve el constructor."""
         self._cliente.consultas.append((self._nombre, columnas))
         return self
 
+    def eq(self, columna: str, valor: object) -> "_TablaFalsa":
+        """Acumula un filtro de igualdad y devuelve el constructor."""
+        self._filtros.append((columna, valor))
+        return self
+
     def execute(self) -> _RespuestaFalsa:
-        """Lanza el error configurado o devuelve las filas de la tabla."""
+        """Lanza el error configurado o devuelve las filas que pasan los filtros."""
         if self._cliente.error is not None:
             raise self._cliente.error
-        return _RespuestaFalsa(list(self._cliente.datos.get(self._nombre, [])))
+        filas = list(self._cliente.datos.get(self._nombre, []))
+        for columna, valor in self._filtros:
+            filas = [fila for fila in filas if fila.get(columna) == valor]
+        return _RespuestaFalsa(filas)
 
 
 class _ClienteFalso:
@@ -299,6 +308,22 @@ def test_buscar_filtra_por_urgencia():
         assert all(r["urgencia"] == urgencia for r in resultado)
 
 
+def test_buscar_ignora_las_no_pendientes():
+    """Las 'revisada'/'descartada' son historial: no deben listarse."""
+    revisada = _recomendacion("r4", "p1", clase_abc="A", clase_xyz="X", ahorro=999.0)
+    revisada["estado"] = "revisada"
+    cliente = _cliente(recomendaciones=_recomendaciones() + [revisada])
+
+    resultado = buscar_recomendaciones(cliente)
+
+    assert [r["producto_nombre"] for r in resultado] == [
+        "Producto A",
+        "Producto B",
+        "Producto C",
+    ]
+    assert all(r["ahorro_neto_estimado"] != pytest.approx(999.0) for r in resultado)
+
+
 def test_buscar_respeta_el_limite():
     resultado = buscar_recomendaciones(_cliente(), limite=2)
 
@@ -541,6 +566,21 @@ def test_resumen_con_la_base_vacia_todo_en_cero():
     assert all(valor == 0 for valor in resumen["por_combinacion"].values())
     assert resumen["suma_ahorro_neto"] == 0.0
     assert type(resumen["suma_ahorro_neto"]) is float
+
+
+def test_resumen_ignora_las_no_pendientes():
+    """Las 'revisada'/'descartada' son historial: no deben contarse."""
+    descartada = _recomendacion(
+        "r4", "p1", clase_abc="A", clase_xyz="X", ahorro=999.0
+    )
+    descartada["estado"] = "descartada"
+    cliente = _cliente(recomendaciones=_recomendaciones() + [descartada])
+
+    resumen = resumen_prioridad_ABC_XYZ(cliente)
+
+    assert resumen["total_recomendaciones"] == 3
+    assert resumen["por_combinacion"]["AX"] == 1
+    assert resumen["suma_ahorro_neto"] == pytest.approx(600.0)
 
 
 # ==================================== serialización, solo lectura y errores

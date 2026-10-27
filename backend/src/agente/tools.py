@@ -42,7 +42,16 @@ Como ``stock_actual`` no está en ``recomendaciones``, cada tool lee también
 las relaciones embebidas de PostgREST (``select("*, productos(nombre)")``) por
 dos motivos: (1) hacen falta columnas de ``productos`` además de ``nombre``
 (``stock_actual``) y (2) el cliente de prueba del proyecto simula únicamente
-``table(...).select(...).execute()``.
+``table(...).select(...).eq(...).execute()``.
+
+Solo recomendaciones pendientes
+-------------------------------
+``buscar_recomendaciones`` y ``resumen_prioridad_ABC_XYZ`` filtran
+``recomendaciones`` por ``estado = 'pendiente'``, igual que el frontend
+(``stores/recomendaciones.js`` y ``stores/kpis.js``): las marcadas como
+``revisada`` o ``descartada`` son historial y no deben listarse ni contarse
+de nuevo si llegaran a coexistir con una versión pendiente del mismo
+producto.
 
 Score de proveedor
 ------------------
@@ -176,7 +185,9 @@ def buscar_recomendaciones(
     _validar_urgencia(urgencia)
     _validar_limite(limite)
 
-    recomendaciones = _leer_tabla(supabase_client, TABLA_RECOMENDACIONES)
+    recomendaciones = _leer_tabla(
+        supabase_client, TABLA_RECOMENDACIONES, solo_pendientes=True
+    )
     if recomendaciones.empty:
         return []
 
@@ -402,7 +413,9 @@ def resumen_prioridad_ABC_XYZ(supabase_client: "Client") -> dict:
     Raises:
         Exception: si Supabase falla (propaga la excepción original).
     """
-    recomendaciones = _leer_tabla(supabase_client, TABLA_RECOMENDACIONES)
+    recomendaciones = _leer_tabla(
+        supabase_client, TABLA_RECOMENDACIONES, solo_pendientes=True
+    )
     if recomendaciones.empty:
         return _resumen_vacio()
 
@@ -446,17 +459,24 @@ def resumen_prioridad_ABC_XYZ(supabase_client: "Client") -> dict:
 # ================================================================== internos
 
 
-def _leer_tabla(supabase_client: "Client", tabla: str) -> pd.DataFrame:
+def _leer_tabla(
+    supabase_client: "Client", tabla: str, *, solo_pendientes: bool = False
+) -> pd.DataFrame:
     """
-    Lee una tabla completa de Supabase y la devuelve como DataFrame.
+    Lee una tabla de Supabase y la devuelve como DataFrame.
 
-    Es la única operación de E/S del módulo (un ``SELECT *``). Si la tabla no
-    tiene filas, devuelve un DataFrame vacío (sin columnas), de modo que los
-    llamadores puedan cortar antes de indexar columnas.
+    Es la única operación de E/S del módulo (un ``SELECT *``). Con
+    ``solo_pendientes=True`` se añade el filtro ``estado = 'pendiente'``: lo
+    usan las tools que listan o agregan ``recomendaciones``, porque las
+    marcadas como 'revisada' o 'descartada' son historial y no deben contarse
+    dos veces. Si la tabla no tiene filas, devuelve un DataFrame vacío (sin
+    columnas), de modo que los llamadores puedan cortar antes de indexar
+    columnas.
 
     Args:
         supabase_client: cliente de Supabase (solo lectura).
         tabla: nombre de la tabla a leer.
+        solo_pendientes: si es ``True``, filtra por ``estado = 'pendiente'``.
 
     Returns:
         DataFrame con una fila por registro; vacío si no hay registros.
@@ -464,7 +484,10 @@ def _leer_tabla(supabase_client: "Client", tabla: str) -> pd.DataFrame:
     Raises:
         Exception: si Supabase falla (propaga la excepción original).
     """
-    respuesta = supabase_client.table(tabla).select("*").execute()
+    consulta = supabase_client.table(tabla).select("*")
+    if solo_pendientes:
+        consulta = consulta.eq("estado", "pendiente")
+    respuesta = consulta.execute()
     filas = respuesta.data
     if not filas:
         return pd.DataFrame()
