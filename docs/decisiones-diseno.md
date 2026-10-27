@@ -793,7 +793,7 @@ de la ruta en `frontend/src/router/index.js` y del link en
 
 ## D-17: Borrado selectivo en el recálculo de recomendaciones
 
-**Contexto**: El recálculo original (`pipeline.py`) hacía un `DELETE` total de la tabla `recomendaciones` antes de insertar las nuevas. Esto causaba dos problemas: si el motor fallaba, la tabla quedaba vacía; y se perdería cualquier recomendación marcada como 'revisada' o 'descartada'. El esquema ya contempla esos estados (`db/schema.sql`), así que el borrado selectivo deja el sistema preparado para conservarlos a futuro; la interfaz para marcarlos queda fuera del MVP (ver Consecuencias).
+**Contexto**: El recálculo original (`pipeline.py`) hacía un `DELETE` total de la tabla `recomendaciones` antes de insertar las nuevas. Esto causaba dos problemas: si el motor fallaba, la tabla quedaba vacía; y el borrado total impediría conservar a futuro las recomendaciones que dejen de estar 'pendiente'. El esquema (`db/schema.sql`) ya prepara el ciclo de vida de las recomendaciones con la columna `estado` (`pendiente`, `revisada`, `descartada`), así que el borrado selectivo deja el sistema preparado para conservar los estados 'revisada' y 'descartada' cuando existan; sin embargo, **cambiar el estado de una recomendación queda fuera del MVP**: la interfaz todavía no permite marcarla como revisada ni descartada (ver Consecuencias).
 
 **Decisión**:
 1. El pipeline genera las nuevas recomendaciones en memoria primero.
@@ -801,7 +801,7 @@ de la ruta en `frontend/src/router/index.js` y del link en
 3. El `DELETE` en base de datos filtra por `estado = 'pendiente'`, conservando las 'revisada' y 'descartada'.
 4. El frontend (`recomendaciones.js`) filtra la cola principal para mostrar solo las 'pendiente', evitando que un producto aparezca duplicado si tiene una versión vieja revisada.
 
-**Consecuencias**: El sistema conserva el historial de lo que el usuario ya evaluó. La cola de recomendaciones se mantiene limpia. El endpoint de recálculo ya no deja la tabla vacía si ocurre un error a mitad del proceso.
+**Consecuencias**: El sistema queda preparado para conservar el historial de lo que el usuario evalúe cuando el ciclo de vida se implemente. La cola de recomendaciones se mantiene limpia. El endpoint de recálculo ya no deja la tabla vacía si ocurre un error a mitad del proceso.
 
 - El ciclo de vida de las recomendaciones (marcar como revisada/descartada) no está implementado en el MVP. La base de datos está preparada para soportarlo en el futuro sin necesidad de rediseñar el pipeline.
 
