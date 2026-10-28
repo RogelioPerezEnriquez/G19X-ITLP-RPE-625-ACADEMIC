@@ -648,6 +648,10 @@ def _ultima_recomendacion(
     """
     Devuelve la recomendación más reciente de un producto.
 
+    Esta función no filtra por estado, ya que su propósito es recuperar el
+    último cálculo del producto, independientemente de si el usuario ya lo
+    revisó.
+
     Args:
         supabase_client: cliente de Supabase (solo lectura).
         producto_id: ``producto_id`` de la recomendación buscada.

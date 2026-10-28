@@ -619,3 +619,26 @@ def test_propaga_la_excepcion_del_cliente():
         buscar_recomendaciones(cliente)
 
     assert capturado.value is error
+
+
+def test_buscar_una_revisada_y_una_pendiente_del_mismo_producto_devuelve_una():
+    """Mismo producto con una 'revisada' y una 'pendiente': solo vale la pendiente."""
+    revisada = _recomendacion(
+        "r4",
+        "p1",
+        clase_abc="A",
+        clase_xyz="X",
+        ahorro=999.0,
+        fecha="2026-01-04T10:00:00+00:00",
+    )
+    revisada["estado"] = "revisada"
+    cliente = _cliente(recomendaciones=_recomendaciones() + [revisada])
+
+    resultado = buscar_recomendaciones(cliente)
+
+    del_producto_a = [
+        fila for fila in resultado if fila["producto_nombre"] == "Producto A"
+    ]
+    assert len(del_producto_a) == 1
+    assert del_producto_a[0]["ahorro_neto_estimado"] == pytest.approx(300.0)
+    assert len(resultado) == 3

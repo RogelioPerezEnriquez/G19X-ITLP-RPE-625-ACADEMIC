@@ -800,6 +800,7 @@ de la ruta en `frontend/src/router/index.js` y del link en
 2. Si el motor falla, la tabla original queda intacta.
 3. El `DELETE` en base de datos filtra por `estado = 'pendiente'`, conservando las 'revisada' y 'descartada'.
 4. El frontend (`recomendaciones.js`) filtra la cola principal para mostrar solo las 'pendiente', evitando que un producto aparezca duplicado si tiene una versión vieja revisada.
+5. El mismo filtro por `estado = 'pendiente'` se aplica en la consulta del panel de KPIs (`kpis.js`) y en las herramientas del agente conversacional (`tools.py`), para asegurar que todos los módulos cuenten la misma cantidad de recomendaciones activas.
 
 **Consecuencias**: El sistema queda preparado para conservar el historial de lo que el usuario evalúe cuando el ciclo de vida se implemente. La cola de recomendaciones se mantiene limpia. El endpoint de recálculo ya no deja la tabla vacía si ocurre un error a mitad del proceso.
 
