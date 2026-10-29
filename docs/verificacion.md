@@ -64,7 +64,7 @@ Cifras y salidas de este documento verificadas sobre el commit `23b134b`
 
 Verifica la lógica pura del sistema sin tocar red ni base de datos: los tests
 inyectan DataFrames sintéticos y (para la configurabilidad) un cliente falso de
-Supabase. Es el nivel más rápido (unos 4 o 5 segundos los 457 tests) y el que
+Supabase. Es el nivel más rápido (unos 4 o 5 segundos los 462 tests) y el que
 conviene correr después de cualquier cambio antes de gastar una corrida contra
 Supabase.
 
@@ -91,17 +91,17 @@ Notas sobre el directorio:
 La última línea debe ser del tipo:
 
 ```text
-457 passed in ~6s
+462 passed in ~6s
 ```
 
-Concretamente: **457 tests pasando, 0 fallos, 0 skips**. Si aparece cualquier
+Concretamente: **462 tests pasando, 0 fallos, 0 skips**. Si aparece cualquier
 `failed`, `error` o `skipped`, el nivel no está aprobado.
 
 ### Qué verifica
 
 - La lógica de los 6 módulos del motor OR (`backend/src/motor/`): ABC, XYZ,
   estimación de demanda, EOQ/ROP, score de proveedor y oportunidad de ahorro.
-  254 de los 457 tests son de estos módulos.
+  254 de los 462 tests son de estos módulos.
 - El recomendador (`backend/src/recomendador.py`), con DataFrames sintéticos:
   orquestación de los módulos, elección de proveedor y fronteras de urgencia.
 - El evaluador (`backend/src/evaluador.py`), con DataFrames sintéticos: la
@@ -539,7 +539,7 @@ cambian.
 
 | Nivel | Requisitos | Comando | Resultado |
 |---|---|---|---|
-| 1. Tests | Instalado | `python -m pytest -q` (desde `backend/`) | 457 pasando |
+| 1. Tests | Instalado | `python -m pytest -q` (desde `backend/`) | 462 pasando |
 | 2. Entorno | `.env`, Supabase, LLM | `python scripts/verificar_rls.py`, `verificar_service_role.py`, `verificar_zai.py` | 3 scripts OK |
 | 3. End-to-end | Seed cargado, `.env` | `python scripts/demo_flujo_completo.py` | 6 recomendaciones, 36 evaluaciones |
 | 4. Configurabilidad | SQL Editor, `.env`, seed | `UPDATE` + demo (Pruebas 1 y 2) | Cambios coherentes y restaurados |
@@ -547,7 +547,7 @@ cambian.
 
 **Estado al escribir este documento** (commit `23b134b`): los niveles 1 y 3 se
 corrieron en vivo, con el resultado de la tabla de referencia del Nivel 3
-(457 pasando, 6 recomendaciones, Atención 1, Sin riesgo 5, Crítico 0, 2 con
+(462 pasando, 6 recomendaciones, Atención 1, Sin riesgo 5, Crítico 0, 2 con
 "Ahorro detectado", suma $1,869.75) y sin escribir nada en Supabase
 (`recomendaciones` seguía en 0 filas). Los niveles 2, 4 y 5 quedan como
 procedimiento reproducible; su última corrida exitosa está registrada en

@@ -38,7 +38,7 @@ verificadas todas las capas:
   con 6 vistas (recomendaciones, explicabilidad, proveedores, chat,
   KPIs y configuración de parámetros).
 
-La suite de tests tiene 457 tests pasando, y se realizaron corridas
+La suite de tests tiene 462 tests pasando, y se realizaron corridas
 end-to-end exitosas contra los datos reales del seed.
 
 Los 8 criterios de aceptación de `docs/mvp.md` §15 se cumplen.
@@ -58,7 +58,7 @@ funcionales).
 | Datos sintéticos | ✅ Completo | `db/seed_sintetico.sql`: 6 productos, 4 proveedores, 8 relaciones producto-proveedor y 72 registros de demanda (12 periodos por producto). |
 | Verificación de seguridad (RLS) | ✅ Completo | `scripts/verificar_rls.py` y `scripts/verificar_service_role.py`: `anon` solo lectura, `service_role` con escritura. Todo el backend escribe con `service_role`. |
 | Conexión con LLM | ✅ Completo | `scripts/verificar_zai.py` valida la configuración y la conectividad con el proveedor (Z.ai / GLM). El agente (`backend/src/agente/`) consume la API a través de function calling. |
-| Motor OR | ✅ Completo | 6 módulos puros en `backend/src/motor/` (RF-02, RF-03, RF-04) con 254 de los 457 tests. Ningún módulo accede a red, base de datos ni archivos. |
+| Motor OR | ✅ Completo | 6 módulos puros en `backend/src/motor/` (RF-02, RF-03, RF-04) con 254 de los 462 tests. Ningún módulo accede a red, base de datos ni archivos. |
 | Recomendador | ✅ Completo | `backend/src/recomendador.py` orquesta el motor (RF-05) y persiste en `recomendaciones`. Verificado contra el seed: 6 recomendaciones generadas. El recálculo completo también se dispara desde el botón de recálculo de la pantalla de Configuración del frontend (endpoint `POST /recomendaciones/recalcular` → `backend/src/pipeline.py`). |
 | Evaluador (rúbrica de 6 criterios) | ✅ Completo | `backend/src/evaluador.py` (RF-06), 76 tests. Escribe en `evaluaciones_criterios`: 6 recomendaciones × 6 criterios = 36 evaluaciones por corrida completa. |
 | Configurabilidad | ✅ Completo | Los 10 parámetros de `parametros_configuracion` llegan a los módulos del motor como argumentos (RF-11), y se verificó end-to-end que cambiarlos altera los resultados. Otras constantes (pesos del score, periodos por año, margen de seguridad, `MIN_PERIODOS`, etiquetas de urgencia) siguen en código por decisión de alcance: ver `docs/pendientes.md`. |
@@ -71,8 +71,8 @@ funcionales).
 ## Métricas del proyecto
 
 - Módulos del motor: 6
-- Archivos de test: 12 (todos en `backend/tests/`)
-- Tests pasando: 457 (0 fallos)
+- Archivos de test: 13 (todos en `backend/tests/`)
+- Tests pasando: 462 (0 fallos)
 - Parámetros configurables: 10 (tabla `parametros_configuracion`)
 - Tablas en la base de datos: 7
 - Scripts en `scripts/`: 7 (verificación de entorno, demos y API del agente)
@@ -94,11 +94,12 @@ Distribución de tests por archivo:
 | `backend/tests/test_eoq_rop.py` | 30 |
 | `backend/tests/test_evaluador.py` | 76 |
 | `backend/tests/test_llm_client.py` | 18 |
+| `backend/tests/test_pipeline.py` | 4 |
 | `backend/tests/test_proveedor.py` | 45 |
 | `backend/tests/test_recomendador.py` | 37 |
-| `backend/tests/test_tools.py` | 26 |
+| `backend/tests/test_tools.py` | 27 |
 | `backend/tests/test_xyz.py` | 51 |
-| **Total** | **457** |
+| **Total** | **462** |
 
 Resultado observado de la corrida del flujo completo contra el seed (commit de
 referencia):
@@ -318,7 +319,7 @@ cd backend
 python -m pytest -q
 ```
 
-Esperado: `457 passed`, en unos 5-10 segundos.
+Esperado: `462 passed`, en unos 5-10 segundos.
 
 **3. Correr el script de demo** (requiere `.env` configurado con
 `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`, y el seed ya cargado en
