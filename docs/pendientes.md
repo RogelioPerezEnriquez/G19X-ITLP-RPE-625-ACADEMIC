@@ -77,6 +77,11 @@ Para decisiones de diseño, ver `docs/decisiones-diseno.md`.
       - Requiere recargar el seed + re-ejecutar el pipeline.
       - Hacer al final, si se quiere una demo con los 3 estados.
 
+- [ ] **Recálculo no atómico** (riesgo conocido)
+      - `pipeline.py` borra las recomendaciones `pendiente` y después inserta las nuevas.
+      - Si el `INSERT` falla por un error de red, la cola queda vacía hasta el siguiente recálculo.
+      - Post-MVP: mover el borrado y la inserción a una función de Postgres (RPC) que corra en una sola transacción.
+
 ## Resueltos
 
 - [x] **Cumplir RF-12: sin registro público**

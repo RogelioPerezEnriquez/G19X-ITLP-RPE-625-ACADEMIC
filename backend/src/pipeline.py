@@ -13,8 +13,8 @@ tal cual para que el llamador (el endpoint de la API) decida cómo reportarlo.
 La limpieza es un solo ``DELETE`` sobre ``recomendaciones`` filtrado por
 ``estado = 'pendiente'``: se hace DESPUÉS de generar las recomendaciones en
 memoria, así que si el motor falla la tabla queda intacta. Solo se borran las
-pendientes; las marcadas como ``revisada`` o ``descartada`` ya fueron
-evaluadas por un usuario y se conservan. La tabla ``evaluaciones_criterios``
+pendientes; se conservan los estados (``revisada``/``descartada``) que
+existan en el futuro (ver D-17). La tabla ``evaluaciones_criterios``
 declara su clave foránea hacia ``recomendaciones`` con ``on delete cascade``
 (ver ``db/schema.sql``), así que las evaluaciones de las filas borradas se
 eliminan en cascada y no hay que eliminarlas a mano.
@@ -44,8 +44,9 @@ def ejecutar_pipeline_completo(supabase_client) -> dict:
     El orden importa: primero se generan las recomendaciones en memoria y
     solo después se borran las filas pendientes de la tabla. Si el motor
     falla (o no genera nada), se aborta antes del DELETE y la tabla queda
-    intacta: no se pierden las recomendaciones vigentes ni los estados
-    ``revisada``/``descartada`` que el usuario ya definió.
+    intacta: no se pierden las recomendaciones vigentes y se conservan los
+    estados (``revisada``/``descartada``) que existan en el futuro (ver
+    D-17).
 
     Args:
         supabase_client: cliente de Supabase con service_role key.
@@ -69,9 +70,10 @@ def ejecutar_pipeline_completo(supabase_client) -> dict:
     if recomendaciones.empty:
         raise ValueError("El motor no generó recomendaciones.")
 
-    # Paso 2: limpiar la tabla. Solo se borran las filas pendientes: las
-    # marcadas como 'revisada' o 'descartada' ya fueron evaluadas por un
-    # usuario y se conservan. El `on delete cascade` de
+    # Paso 2: limpiar la tabla. Solo se borran las filas pendientes: se
+    # conservan los estados ('revisada'/'descartada') que existan en el
+    # futuro (ver D-17), como preparación para cuando el usuario pueda
+    # marcarlos. El `on delete cascade` de
     # `evaluaciones_criterios.recomendacion_id` borra las evaluaciones de
     # las pendientes eliminadas, así que no hay que tocar esa tabla.
     supabase_client.table(TABLA_RECOMENDACIONES).delete().eq(

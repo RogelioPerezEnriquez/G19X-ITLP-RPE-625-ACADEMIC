@@ -12,6 +12,9 @@ El proyecto cubre una sola capacidad de punta a punta: **reabastecimiento
 de inventario con evaluación explicada por criterios**, más un agente
 conversacional de consulta en lenguaje natural.
 
+Para saber cómo usar la interfaz paso a paso, consulta el
+`docs/manual-usuario.md`.
+
 ---
 
 ## Estado del proyecto
@@ -93,7 +96,9 @@ funciona con cualquier dataset que respete el esquema de `db/schema.sql`.
 │   ├── decisiones-diseno.md
 │   ├── verificacion.md
 │   ├── verificacion-final.md
-│   └── pendientes.md
+│   ├── pendientes.md
+│   ├── manual-usuario.md       Manual de usuario con capturas
+│   └── manual-usuario.pdf      Versión PDF del manual 
 └── README.md
 ```
 
@@ -448,6 +453,15 @@ Verifica que el archivo `.env` tenga la variable
 corriendo en la terminal 1.
 
 ---
+
+## Nota sobre el uso de herramientas de IA
+
+Durante el desarrollo de este proyecto se utilizaron asistentes de IA para:
+- **Generación de código base:** escritura inicial del motor OR, el frontend y los tests (revisados y ajustados manualmente).
+- **Documentación:** redacción de los primeros borradores del README, ADRs y este manual.
+- **Revisión de seguridad:** identificación de vulnerabilidades en la API del agente y sugerencias de protección.
+
+Todas las decisiones arquitectónicas, la definición del alcance, la corrección de errores de instalación y la validación final del sistema fueron realizadas por el autor.
 
 ## Licencia
 
