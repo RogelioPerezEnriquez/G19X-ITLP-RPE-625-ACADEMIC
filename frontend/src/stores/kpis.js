@@ -66,6 +66,9 @@ export const useKpisStore = defineStore('kpis', {
         // criterio por recomendación, así que el conteo equivale a la
         // cantidad de recomendaciones con ahorro detectado según el
         // evaluador (umbral del 3 % del costo total del pedido).
+        // Nota: se usa una unión interna (!inner) para contar solo las
+        // evaluaciones cuyas recomendaciones sigan pendientes, alineado
+        // con la cola principal y D-17.
         const [resultadoRecomendaciones, resultadoAhorro] = await Promise.all([
           supabase
             .from('recomendaciones')
@@ -76,9 +79,10 @@ export const useKpisStore = defineStore('kpis', {
             .eq('estado', 'pendiente'),
           supabase
             .from('evaluaciones_criterios')
-            .select('id', { count: 'exact', head: true })
+            .select('id, recomendaciones!inner(estado)', { count: 'exact', head: true })
             .eq('criterio', 'oportunidad_ahorro')
-            .eq('estado', 'Ahorro detectado'),
+            .eq('estado', 'Ahorro detectado')
+            .eq('recomendaciones.estado', 'pendiente'),
         ])
 
         if (resultadoRecomendaciones.error) throw resultadoRecomendaciones.error
