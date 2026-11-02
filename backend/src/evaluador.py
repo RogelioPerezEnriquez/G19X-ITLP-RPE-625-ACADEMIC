@@ -379,6 +379,10 @@ def evaluar_recomendaciones(
     Raises:
         ValueError: si falta alguna columna de :data:`COLUMNAS_REQUERIDAS`,
             tenga o no filas el DataFrame.
+        ValueError: si algún par de umbrales ordenados es incoherente
+            (``eoq_min_pct >= eoq_max_pct``,
+            ``cv_confianza_alta >= cv_confianza_media`` o
+            ``score_proveedor_riesgoso >= score_proveedor_confiable``).
         ValueError: si alguna fila trae una combinación ``clase_abc`` x
             ``clase_xyz`` fuera de la tabla del criterio 4.
         KeyError: si ``parametros`` no trae alguna de las claves de umbral que
@@ -406,6 +410,16 @@ def evaluar_recomendaciones(
     # de unidad se guardan en variables locales.
     if parametros is None:
         parametros = PARAMETROS_DEFAULT
+
+    # Validación de coherencia lógica entre umbrales: un par invertido haría
+    # que los criterios evaluaran con cortes sin sentido (bandas vacías o
+    # estados inalcanzables), así que se rechaza antes de procesar los datos.
+    if parametros["eoq_min_pct"] >= parametros["eoq_max_pct"]:
+        raise ValueError("Error de configuración: 'eoq_min_pct' debe ser menor que 'eoq_max_pct'.")
+    if parametros["cv_confianza_alta"] >= parametros["cv_confianza_media"]:
+        raise ValueError("Error de configuración: 'cv_confianza_alta' debe ser menor que 'cv_confianza_media'.")
+    if parametros["score_proveedor_riesgoso"] >= parametros["score_proveedor_confiable"]:
+        raise ValueError("Error de configuración: 'score_proveedor_riesgoso' debe ser menor que 'score_proveedor_confiable'.")
 
     # Conversiones de unidad (preservan la semántica del código anterior): la
     # tabla de configuración trae los porcentajes (90.0, 110.0, 3.0) y los cortes

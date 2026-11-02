@@ -853,9 +853,11 @@ def test_parametros_custom_del_eoq_mueven_las_fronteras_del_ratio(
             ESTADO_ALTA_CONFIANZA,
         ),
         # Corte de "Confianza moderada" a 0.4: el CV 0.6 se le escapa y pasa a
-        # "Baja confianza (revisión manual)".
+        # "Baja confianza (revisión manual)". El corte de "Alta confianza" baja
+        # a 0.3 para mantener la coherencia del par (alta < media), exigida por
+        # la validación de umbrales.
         (
-            {"cv_confianza_media": 0.4},
+            {"cv_confianza_alta": 0.3, "cv_confianza_media": 0.4},
             ESTADO_CONFIANZA_MODERADA,
             ESTADO_BAJA_CONFIANZA,
         ),
@@ -884,10 +886,12 @@ def test_parametros_custom_del_cv_mueven_los_dos_cortes_de_confianza(
     "score_proveedor, cambios, estado_por_defecto, estado_con_custom",
     [
         # 75 es "Aceptable con reservas" (>= 60 y < 80) y pasa a "Riesgoso" si el
-        # corte estricto sube a 80.
+        # corte estricto sube a 80. El de "Confiable" sube a 90 para mantener la
+        # coherencia del par (riesgoso < confiable), exigida por la validación
+        # de umbrales.
         (
             75.0,
-            {"score_proveedor_riesgoso": 80.0},
+            {"score_proveedor_riesgoso": 80.0, "score_proveedor_confiable": 90.0},
             ESTADO_ACEPTABLE_CON_RESERVAS,
             ESTADO_RIESGOSO,
         ),
@@ -989,6 +993,31 @@ def test_parametros_incompleto_con_filas_lanza_key_error_de_la_clave_ausente():
         evaluar_recomendaciones(_uno(), parametros={"cv_confianza_alta": 0.5})
 
 
+def test_eoq_min_mayor_o_igual_que_eoq_max_lanza_value_error():
+    """eoq_min_pct >= eoq_max_pct es incoherente: la banda óptima quedaría vacía."""
+    custom = {**PARAMETROS_DEFAULT, "eoq_min_pct": 120.0}
+
+    with pytest.raises(ValueError, match="eoq_min_pct"):
+        evaluar_recomendaciones(_uno(), parametros=custom)
+
+
+def test_cv_alta_mayor_o_igual_que_cv_media_lanza_value_error():
+    """cv_confianza_alta >= cv_confianza_media invertiría los cortes del CV."""
+    custom = {**PARAMETROS_DEFAULT, "cv_confianza_alta": 1.5}
+
+    with pytest.raises(ValueError, match="cv_confianza_alta"):
+        evaluar_recomendaciones(_uno(), parametros=custom)
+
+
+def test_score_riesgoso_mayor_o_igual_que_score_confiable_lanza_value_error():
+    """score_proveedor_riesgoso >= score_proveedor_confiable es incoherente:
+    haría inalcanzable el estado "Aceptable con reservas"."""
+    custom = {**PARAMETROS_DEFAULT, "score_proveedor_riesgoso": 95.0}
+
+    with pytest.raises(ValueError, match="score_proveedor_riesgoso"):
+        evaluar_recomendaciones(_uno(), parametros=custom)
+
+
 # ------------------------------------------------------------------ E/S
 
 
@@ -1065,12 +1094,17 @@ def test_evaluar_y_guardar_inserta_los_seis_criterios_con_valores_nativos():
 def test_evaluar_y_guardar_carga_los_parametros_de_supabase_si_no_se_le_pasan():
     """Sin ``parametros``, la conveniencia los lee de la tabla de configuración.
 
-    El cliente falso sirve una configuración con el corte de "Riesgoso" en 80, así
-    que la recomendación de score 75 queda "Riesgoso": ese estado solo puede
-    venir de los parámetros que se leyeron de Supabase.
+    El cliente falso sirve una configuración con el corte de "Riesgoso" en 80 y
+    el de "Confiable" en 90 (par coherente), así que la recomendación de score
+    75 queda "Riesgoso": ese estado solo puede venir de los parámetros que se
+    leyeron de Supabase.
     """
     cliente = _ClienteFalso(
-        parametros={**PARAMETROS_DEFAULT, "score_proveedor_riesgoso": 80.0}
+        parametros={
+            **PARAMETROS_DEFAULT,
+            "score_proveedor_riesgoso": 80.0,
+            "score_proveedor_confiable": 90.0,
+        }
     )
 
     evaluar_y_guardar(cliente, _uno(score_proveedor=75.0))
@@ -1089,10 +1123,15 @@ def test_evaluar_y_guardar_no_carga_los_parametros_si_ya_se_le_pasan():
     """Con ``parametros``, no se hace la lectura extra a Supabase.
 
     Los umbrales pasados son los que se usan: la recomendación de score 75 queda
-    "Riesgoso" con el corte en 80, y la única tabla tocada es la de evaluaciones.
+    "Riesgoso" con el corte en 80 (y el de "Confiable" en 90, para que el par
+    sea coherente), y la única tabla tocada es la de evaluaciones.
     """
     cliente = _ClienteFalso()
-    custom = {**PARAMETROS_DEFAULT, "score_proveedor_riesgoso": 80.0}
+    custom = {
+        **PARAMETROS_DEFAULT,
+        "score_proveedor_riesgoso": 80.0,
+        "score_proveedor_confiable": 90.0,
+    }
 
     evaluar_y_guardar(cliente, _uno(score_proveedor=75.0), parametros=custom)
 

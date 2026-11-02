@@ -72,14 +72,20 @@ const erroresValidacion = computed(() => {
     }
   }
 
-  const claseA = valorDe('abc_clase_a_pct')
-  const claseB = valorDe('abc_clase_b_pct')
-  if (
-    Number.isFinite(claseA) &&
-    Number.isFinite(claseB) &&
-    claseA >= claseB
-  ) {
-    errores.push('"abc_clase_a_pct" debe ser menor que "abc_clase_b_pct".')
+  // Pares de umbrales que deben cumplir "menor < mayor".
+  const paresMenorMayor = [
+    ['abc_clase_a_pct', 'abc_clase_b_pct'],
+    ['eoq_min_pct', 'eoq_max_pct'],
+    ['cv_confianza_alta', 'cv_confianza_media'],
+    ['score_proveedor_riesgoso', 'score_proveedor_confiable']
+  ]
+
+  for (const [menor, mayor] of paresMenorMayor) {
+    const valorMenor = valorDe(menor)
+    const valorMayor = valorDe(mayor)
+    if (Number.isFinite(valorMenor) && Number.isFinite(valorMayor) && valorMenor >= valorMayor) {
+      errores.push(`"${menor}" debe ser menor que "${mayor}".`)
+    }
   }
 
   return errores
