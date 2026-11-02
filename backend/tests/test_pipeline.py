@@ -74,8 +74,8 @@ def test_motor_vacio_no_borra_nada():
 def test_borra_solo_pendientes():
     """En el camino feliz el DELETE filtra por ``estado = 'pendiente'``.
 
-    Solo se borran las pendientes; las marcadas como ``revisada`` o
-    ``descartada`` ya fueron evaluadas por un usuario y se conservan.
+    Solo se borran las pendientes; se conservan los estados
+    (``revisada``/``descartada``) que existan en el futuro (ver D-17).
     """
     cliente = MagicMock()
     with (

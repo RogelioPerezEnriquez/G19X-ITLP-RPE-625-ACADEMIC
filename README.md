@@ -148,6 +148,15 @@ git --version
 Si alguno de estos comandos da un error de "término no reconocido",
 significa que no está instalado o no se agregó al PATH del sistema.
 
+### Si no tienes acceso a mi Supabase (instalación desde cero)
+
+Por defecto, la configuración asume que usarás el Supabase del autor. Si quieres levantar una base de datos propia:
+1. Crea un proyecto nuevo en [supabase.com](https://supabase.com).
+2. Ve al **SQL Editor** de tu proyecto y ejecuta el contenido de `db/schema.sql` (crea las tablas y los parámetros).
+3. Ejecuta `db/seed_sintetico.sql` (carga los datos de prueba).
+4. Crea el usuario administrador siguiendo los pasos de la sección "4. Crear el usuario administrador".
+5. Copia la **URL** y las **API Keys** (anon y service_role) de tu proyecto en el archivo `.env` (sección "2. Configurar variables de entorno").
+
 ### 1. Clonar el repositorio
 
 ```bash
@@ -180,7 +189,7 @@ Variables requeridas:
 | `SUPABASE_SERVICE_ROLE_KEY` | Key secreta (escritura, solo backend) |
 | `LLM_PROVIDER` | Proveedor de LLM (`zai`) |
 | `LLM_BASE_URL` | Endpoint del LLM |
-| `LLM_API_KEY` | API key del LLM |
+| `LLM_API_KEY` | API key del LLM. Se entrega en Documentos del SGPA (Técnicos → Accesos de prueba) |
 | `LLM_MODEL` | Identificador del modelo |
 | `VITE_SUPABASE_URL` | URL de Supabase (para el frontend) |
 | `VITE_SUPABASE_ANON_KEY` | Key pública (para el frontend) |
@@ -276,6 +285,10 @@ npm run dev
 ```
 
 Vite levanta el servidor en `http://localhost:5173`.
+
+**Importante sobre los puertos:** 
+- La API de FastAPI se levanta obligatoriamente en el puerto `8000` (así está configurado en `scripts/run_api.py`).
+- El frontend debe abrirse obligatoriamente en el puerto `5173` (así está configurado el CORS en `api.py`). Si ocupas el 5173, Vite intentará usar el 5174 y el chat dará un error de CORS.
 
 Acceder a `http://localhost:5173` y loguearse con el usuario admin.
 
