@@ -253,9 +253,12 @@ def preguntar(
 
     Returns:
         Tupla ``(respuesta_texto, historial_actualizado)``. El
-        ``historial_actualizado`` incluye los mensajes ``user``, ``assistant`` y
-        ``tool`` de esta interacción (más los previos, si los había) y **no**
-        incluye el prompt del sistema: se pasa tal cual en la próxima llamada.
+        ``historial_actualizado`` es la conversación **visible**, ya limpia:
+        sólo los mensajes ``user`` y las respuestas ``assistant`` con texto
+        (más los previos, si los había). Los mensajes internos de herramientas
+        (los ``assistant`` con ``tool_calls`` y los ``tool``) se omiten porque
+        la API sólo acepta los roles ``user``/``assistant``. Tampoco incluye
+        el prompt del sistema: se pasa tal cual en la próxima llamada.
 
     Raises:
         RuntimeError: si el LLM falla de forma repetida (error recuperable
@@ -285,7 +288,17 @@ def preguntar(
 
         if eleccion.finish_reason == "stop":
             mensajes.append(_mensaje_asistente(mensaje))
-            return mensaje.content or "", mensajes[1:]
+            # Al cliente sólo le devolvemos la conversación visible: los turnos
+            # del usuario y las respuestas finales. Los mensajes `tool` y los
+            # `assistant` con `tool_calls` sólo sirven dentro de esta llamada.
+            historial_visible = [
+                {"role": m["role"], "content": m["content"]}
+                for m in mensajes[1:]
+                if m["role"] in ("user", "assistant")
+                and m.get("content")
+                and not m.get("tool_calls")
+            ]
+            return mensaje.content or "", historial_visible
 
         raise RuntimeError(
             "El LLM terminó con un estado inesperado: "

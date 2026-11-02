@@ -189,7 +189,12 @@ def test_historial_none_empieza_conversacion_nueva(monkeypatch):
 
 
 def test_una_tool_call_ejecuta_la_tool_y_arma_el_historial(monkeypatch):
-    """Una ``tool_call`` se ejecuta y su resultado entra al historial."""
+    """Una ``tool_call`` se ejecuta; el historial devuelto es sólo lo visible.
+
+    El mensaje ``tool`` y el ``assistant`` con ``tool_calls`` se usan dentro
+    del bucle (se envían al LLM), pero no se devuelven al cliente: la API
+    sólo acepta los roles ``user``/``assistant``.
+    """
     herramienta = Mock(return_value=[{"producto_nombre": "Producto A"}])
     cliente_supabase = object()
     cliente = _preparar(
@@ -210,26 +215,31 @@ def test_una_tool_call_ejecuta_la_tool_y_arma_el_historial(monkeypatch):
     # La tool recibe el supabase_client inyectado y los argumentos del LLM.
     herramienta.assert_called_once_with(cliente_supabase, urgencia="Crítico")
 
-    # assistant (con tool_calls) + tool + assistant final.
-    assert historial[1]["role"] == "assistant"
-    assert historial[1]["tool_calls"][0]["id"] == "call-1"
-    assert historial[1]["tool_calls"][0]["function"]["name"] == "buscar_recomendaciones"
-    mensaje_tool = historial[2]
+    # El historial devuelto es sólo la conversación visible: el turno del
+    # usuario y la respuesta final del asistente.
+    assert historial == [
+        {"role": "user", "content": "¿Qué es urgente?"},
+        {"role": "assistant", "content": "Hay 1 recomendación crítica."},
+    ]
+
+    # Los mensajes internos (assistant con tool_calls + tool) sí se enviaron
+    # al LLM en la segunda llamada.
+    assert len(cliente.llamadas) == 2
+    mensajes_llm = cliente.llamadas[1]["messages"]
+    assert mensajes_llm[2]["role"] == "assistant"
+    assert mensajes_llm[2]["tool_calls"][0]["id"] == "call-1"
+    assert mensajes_llm[2]["tool_calls"][0]["function"]["name"] == "buscar_recomendaciones"
+    mensaje_tool = mensajes_llm[3]
     assert mensaje_tool["role"] == "tool"
     assert mensaje_tool["tool_call_id"] == "call-1"
     assert json.loads(mensaje_tool["content"]) == [{"producto_nombre": "Producto A"}]
-    assert historial[3] == {
-        "role": "assistant",
-        "content": "Hay 1 recomendación crítica.",
-    }
-    assert len(cliente.llamadas) == 2
 
 
 def test_dos_tool_calls_en_una_respuesta_ejecuta_ambas(monkeypatch):
     """Dos ``tool_calls`` en la misma respuesta se ejecutan las dos."""
     primera = Mock(return_value=[{"x": 1}])
     segunda = Mock(return_value={"y": 2})
-    _preparar(
+    cliente = _preparar(
         monkeypatch,
         [
             _respuesta_tools(
@@ -249,9 +259,19 @@ def test_dos_tool_calls_en_una_respuesta_ejecuta_ambas(monkeypatch):
     assert respuesta == "Listo."
     primera.assert_called_once()
     segunda.assert_called_once()
-    assert [m["role"] for m in historial] == ["user", "assistant", "tool", "tool", "assistant"]
-    assert historial[2]["tool_call_id"] == "c1"
-    assert historial[3]["tool_call_id"] == "c2"
+    # El historial devuelto es sólo la conversación visible.
+    assert [m["role"] for m in historial] == ["user", "assistant"]
+    # Los dos mensajes ``tool`` se enviaron al LLM en la segunda llamada.
+    mensajes_llm = cliente.llamadas[1]["messages"]
+    assert [m["role"] for m in mensajes_llm] == [
+        "system",
+        "user",
+        "assistant",
+        "tool",
+        "tool",
+    ]
+    assert mensajes_llm[3]["tool_call_id"] == "c1"
+    assert mensajes_llm[4]["tool_call_id"] == "c2"
 
 
 def test_multiples_iteraciones_hasta_la_respuesta_final(monkeypatch):
@@ -272,13 +292,16 @@ def test_multiples_iteraciones_hasta_la_respuesta_final(monkeypatch):
     assert respuesta == "Final."
     assert herramienta.call_count == 2
     assert len(cliente.llamadas) == 3
-    assert [m["role"] for m in historial] == [
+    # El historial devuelto es sólo la conversación visible.
+    assert [m["role"] for m in historial] == ["user", "assistant"]
+    # En la última llamada el LLM recibió todos los mensajes internos.
+    assert [m["role"] for m in cliente.llamadas[2]["messages"]] == [
+        "system",
         "user",
         "assistant",
         "tool",
         "assistant",
         "tool",
-        "assistant",
     ]
 
 
@@ -369,7 +392,7 @@ def test_finish_reason_inesperado_lanza_runtime_error(monkeypatch):
 
 def test_tool_inexistente_anade_mensaje_de_error_y_continua(monkeypatch):
     """Una tool desconocida no corta el bucle: se informa y se sigue."""
-    _preparar(
+    cliente = _preparar(
         monkeypatch,
         [
             _respuesta_tools(_llamada("c1", "tool_que_no_existe")),
@@ -381,7 +404,10 @@ def test_tool_inexistente_anade_mensaje_de_error_y_continua(monkeypatch):
     respuesta, historial = preguntar("Hola")
 
     assert respuesta == "Sigo con otra cosa."
-    mensaje_tool = historial[2]
+    # El historial devuelto es sólo la conversación visible.
+    assert [m["role"] for m in historial] == ["user", "assistant"]
+    # El error se envió al LLM como mensaje ``tool`` en la segunda llamada.
+    mensaje_tool = cliente.llamadas[1]["messages"][3]
     assert mensaje_tool["role"] == "tool"
     assert mensaje_tool["tool_call_id"] == "c1"
     assert "error" in json.loads(mensaje_tool["content"])
@@ -390,7 +416,7 @@ def test_tool_inexistente_anade_mensaje_de_error_y_continua(monkeypatch):
 def test_argumentos_json_invalidos_anaden_error_y_continua(monkeypatch):
     """Argumentos que no son JSON válido se reportan y el bucle continúa."""
     herramienta = Mock()
-    _preparar(
+    cliente = _preparar(
         monkeypatch,
         [
             _respuesta_tools(
@@ -404,14 +430,19 @@ def test_argumentos_json_invalidos_anaden_error_y_continua(monkeypatch):
     respuesta, historial = preguntar("Hola")
 
     assert respuesta == "Sigo."
-    assert "error" in json.loads(historial[2]["content"])
+    # El historial devuelto es sólo la conversación visible.
+    assert [m["role"] for m in historial] == ["user", "assistant"]
+    # El error se envió al LLM como mensaje ``tool`` en la segunda llamada.
+    mensaje_tool = cliente.llamadas[1]["messages"][3]
+    assert mensaje_tool["role"] == "tool"
+    assert "error" in json.loads(mensaje_tool["content"])
     herramienta.assert_not_called()
 
 
 def test_tool_que_lanza_value_error_se_reporta_y_continua(monkeypatch):
     """Un ``ValueError`` de la tool se devuelve como error, no rompe el bucle."""
     herramienta = Mock(side_effect=ValueError("producto no válido"))
-    _preparar(
+    cliente = _preparar(
         monkeypatch,
         [
             _respuesta_tools(
@@ -425,7 +456,11 @@ def test_tool_que_lanza_value_error_se_reporta_y_continua(monkeypatch):
     respuesta, historial = preguntar("Hola")
 
     assert respuesta == "Sigo."
-    assert json.loads(historial[2]["content"]) == {"error": "producto no válido"}
+    # El historial devuelto es sólo la conversación visible.
+    assert [m["role"] for m in historial] == ["user", "assistant"]
+    # El error se envió al LLM como mensaje ``tool`` en la segunda llamada.
+    mensaje_tool = cliente.llamadas[1]["messages"][3]
+    assert json.loads(mensaje_tool["content"]) == {"error": "producto no válido"}
 
 
 # ====================================================== historial

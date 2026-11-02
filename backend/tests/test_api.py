@@ -125,6 +125,18 @@ def test_preguntar_historial_con_rol_system_devuelve_422(client_autenticado):
     assert respuesta.status_code == 422
 
 
+def test_preguntar_historial_con_rol_tool_devuelve_422(client_autenticado):
+    """Un historial con rol ``tool`` (mensaje interno) se rechaza con 422."""
+    respuesta = client_autenticado.post(
+        "/agente/preguntar",
+        json={
+            "pregunta": "¿Y del otro producto?",
+            "historial": [{"role": "tool", "content": "[]"}],
+        },
+    )
+    assert respuesta.status_code == 422
+
+
 def test_preguntar_historial_valido_devuelve_200(
     client_autenticado, preguntar_mockeada
 ):
