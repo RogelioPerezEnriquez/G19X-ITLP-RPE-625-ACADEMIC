@@ -1,7 +1,13 @@
 import os
+import sys
 from pathlib import Path
 from supabase import create_client, Client
 from dotenv import load_dotenv
+
+# La consola de Windows no siempre es UTF-8: sin esto, los print con
+# caracteres especiales (como emojis) truenan con UnicodeEncodeError.
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # Carga las variables de entorno desde .env
 load_dotenv(Path(__file__).parent.parent /".env")
