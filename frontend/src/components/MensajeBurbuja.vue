@@ -31,7 +31,7 @@ const htmlRenderizado = computed(() => {
          símbolos literales que no deben interpretarse como Markdown. -->
     <div
       v-if="esUsuario"
-      class="max-w-md whitespace-pre-wrap rounded-t-xl rounded-bl-xl rounded-br-none bg-blue-600 px-4 py-2 text-sm text-white"
+      class="max-w-full whitespace-pre-wrap rounded-t-xl rounded-bl-xl rounded-br-none bg-blue-600 px-4 py-2 text-sm text-white md:max-w-md"
     >
       {{ mensaje.content }}
     </div>
@@ -40,7 +40,7 @@ const htmlRenderizado = computed(() => {
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div
       v-else
-      class="markdown max-w-md rounded-t-xl rounded-br-xl rounded-bl-none border border-gray-200 bg-white px-4 py-2 text-sm text-gray-800"
+      class="markdown max-w-full overflow-x-auto rounded-t-xl rounded-br-xl rounded-bl-none border border-gray-200 bg-white px-4 py-2 text-sm text-gray-800 md:max-w-md"
       v-html="htmlRenderizado"
     ></div>
   </div>
@@ -126,9 +126,13 @@ const htmlRenderizado = computed(() => {
   color: #4b5563;
 }
 
+/* Las tablas anchas se desplazan dentro de su propio bloque en lugar de
+   forzar el ancho de la burbuja (y de la página) en pantallas pequeñas. */
 .markdown :deep(table) {
+  display: block;
   margin: 0.5rem 0;
   width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   font-size: 0.8125rem;
 }

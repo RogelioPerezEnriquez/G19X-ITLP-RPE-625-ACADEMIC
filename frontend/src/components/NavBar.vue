@@ -13,13 +13,13 @@ async function cerrarSesion() {
 
 <template>
   <header class="bg-white shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
-      <div class="flex items-center gap-6">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
         <RouterLink to="/" class="text-xl font-semibold text-gray-800">
           Sistema de Optimización de Compras
         </RouterLink>
 
-        <nav v-if="authStore.estaAutenticado" class="flex items-center gap-4 text-sm">
+        <nav v-if="authStore.estaAutenticado" class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           <RouterLink to="/" class="text-gray-600 hover:text-gray-900">
             Inicio
           </RouterLink>
@@ -47,7 +47,7 @@ async function cerrarSesion() {
 
       <div
         v-if="authStore.estaAutenticado"
-        class="flex items-center gap-3 text-sm"
+        class="flex flex-wrap items-center gap-3 text-sm"
       >
         <span
           v-if="authStore.isAdmin"
