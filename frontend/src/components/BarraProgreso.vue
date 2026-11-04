@@ -1,5 +1,9 @@
 <script setup>
 import { computed } from 'vue'
+// Formato mexicano centralizado: porcentaje con punto decimal (p. ej.
+// "95 %" o "96.2 %"). No fuerza decimales: un valor entero se muestra
+// como "95 %".
+import { porcentaje } from '../utils/formato'
 
 const props = defineProps({
   valor: {
@@ -16,15 +20,9 @@ const props = defineProps({
   },
 })
 
-// Formato español: decimal con "," (p. ej. "95 %" o "96,2 %"). No fuerza
-// decimales: un valor entero se muestra como "95 %".
-const formateador = new Intl.NumberFormat('es-ES', {
-  maximumFractionDigits: 1,
-})
-
 const valorFormateado = computed(() => {
   const numero = Number(props.valor)
-  return Number.isFinite(numero) ? `${formateador.format(numero)} %` : '—'
+  return Number.isFinite(numero) ? `${porcentaje.format(numero)} %` : '—'
 })
 
 // El ancho de la barra se acota a [0, 100] para que un valor fuera de rango no

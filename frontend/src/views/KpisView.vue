@@ -5,38 +5,28 @@ import KpiCard from '../components/KpiCard.vue'
 import DistribucionBarra from '../components/DistribucionBarra.vue'
 import GridABCXYZ from '../components/GridABCXYZ.vue'
 import UrgenciaBadge from '../components/UrgenciaBadge.vue'
+// Formato mexicano centralizado: moneda "$1,470.64" y porcentaje "66.7".
+// Se importa con alias porque el computed de abajo usa la variable local
+// `porcentaje`.
+import { moneda, porcentaje as formatoPorcentaje } from '../utils/formato'
 
 const kpisStore = useKpisStore()
-
-// Formato español: separador de miles "." y decimal "," (p. ej. 1.470,64).
-// `useGrouping: 'always'` es necesario porque el español, por defecto
-// (minimumGroupingDigits = 2), omite el separador de miles en números de
-// cuatro cifras y devolvería "1470,64" en lugar de "1.470,64".
-const formateadorMoneda = new Intl.NumberFormat('es-ES', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-  useGrouping: 'always',
-})
-
-const formateadorPorcentaje = new Intl.NumberFormat('es-ES', {
-  maximumFractionDigits: 1,
-})
 
 const metricas = computed(() => kpisStore.metricas)
 
 const hayDatos = computed(() => metricas.value.total_recomendaciones > 0)
 
-// El ahorro neto se expresa en pesos mexicanos con el símbolo "$".
+// El ahorro neto se expresa en pesos mexicanos ("$" incluido por `moneda`).
 const ahorroFormateado = computed(() => {
-  const numero = Number(metricas.value.suma_ahorro_neto)
-  return Number.isFinite(numero) ? `$${formateadorMoneda.format(numero)}` : '—'
+  const monto = Number(metricas.value.suma_ahorro_neto)
+  return Number.isFinite(monto) ? moneda.format(monto) : '—'
 })
 
 const porcentajeConAhorro = computed(() => {
   const total = metricas.value.total_recomendaciones
   if (!total) return '0 %'
   const porcentaje = (metricas.value.con_ahorro_detectado / total) * 100
-  return `${formateadorPorcentaje.format(porcentaje)} %`
+  return `${formatoPorcentaje.format(porcentaje)} %`
 })
 
 const URGENCIAS = [

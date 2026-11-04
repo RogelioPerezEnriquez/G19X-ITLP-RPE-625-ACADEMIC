@@ -15,12 +15,14 @@ cantidad_EOQ >= cantidad_umbral_descuento" de la fórmula abreviada de ``MVP.md`
 §10 se lee como el caso que ya accede al descuento sin tocar la cantidad, no
 como una prohibición de subirla. El módulo cuantifica ese intercambio:
 
-* Cantidad pedida::
+* Cantidad pedida (se redondea hacia arriba a piezas enteras con
+  ``np.ceil`` —equivalente vectorizado de ``math.ceil``— apenas se
+  determina su valor, antes de calcular cualquier monto)::
 
-      cantidad_pedido = cantidad_eoq
+      cantidad_pedido = ceil(cantidad_eoq)
                         si el producto no tiene descuento
                         o si cantidad_eoq >= cantidad_umbral_descuento
-      cantidad_pedido = cantidad_umbral_descuento
+      cantidad_pedido = ceil(cantidad_umbral_descuento)
                         si cantidad_eoq < cantidad_umbral_descuento
 
 * Cantidad extra, solo cuando hubo que subir el pedido::
@@ -339,8 +341,17 @@ def calcular_ahorro(
     cantidad_pedido: np.ndarray = np.where(
         sube_al_umbral, cantidad_umbral, cantidad_eoq
     )
+    # Las piezas se compran enteras: se redondea hacia arriba apenas se
+    # determina la cantidad del pedido (ya sea el EOQ o el umbral de
+    # descuento), ANTES de valorar el dinero. El cálculo es vectorizado,
+    # así que se usa np.ceil (equivalente de math.ceil sobre arreglos:
+    # math.ceil no acepta un ndarray). Todo lo que sigue (cantidad_extra,
+    # ahorro_bruto, costo_extra_mantener y ahorro_neto) usa esta cantidad
+    # ya redondeada, de modo que los montos reflejan exactamente el costo
+    # de comprar ese número entero de piezas.
+    cantidad_pedido = np.ceil(cantidad_pedido)
     cantidad_extra: np.ndarray = np.where(
-        sube_al_umbral, cantidad_umbral - cantidad_eoq, 0.0
+        sube_al_umbral, cantidad_pedido - cantidad_eoq, 0.0
     )
 
     # Acceso al descuento: el producto lo tiene y la cantidad sugerida (por EOQ

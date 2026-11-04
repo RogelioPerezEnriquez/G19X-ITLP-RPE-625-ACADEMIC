@@ -1,6 +1,9 @@
 <script setup>
 import { computed } from 'vue'
 import { CRITERIOS_POR_KEY } from '../constants/criterios'
+// Formato mexicano centralizado: montos "$1,470.64" y valores con hasta
+// cuatro decimales.
+import { moneda, numeroPreciso } from '../utils/formato'
 
 const props = defineProps({
   criterio: {
@@ -80,20 +83,6 @@ function colorDeEstado(estado) {
 
 const clasesBadge = computed(() => colorDeEstado(props.estado))
 
-// Formato español: separador de miles "." y decimal ",". `useGrouping:
-// 'always'` fuerza el separador en números de cuatro cifras (el español, por
-// defecto, lo omite: "1470,64" en lugar de "1.470,64").
-const formateadorMoneda = new Intl.NumberFormat('es-ES', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-  useGrouping: 'always',
-})
-
-const formateadorNumero = new Intl.NumberFormat('es-ES', {
-  maximumFractionDigits: 4,
-  useGrouping: 'always',
-})
-
 const valorFormateado = computed(() => {
   // "Importancia del producto" es un criterio categórico puro (su
   // `valor_numerico` es null): se muestra la combinación de clases.
@@ -109,11 +98,11 @@ const valorFormateado = computed(() => {
 
   const unidad = definicion.value.unidad
   if (unidad === '$') {
-    return `$ ${formateadorMoneda.format(props.valorNumerico)}`
+    return moneda.format(props.valorNumerico)
   }
 
-  const numero = formateadorNumero.format(props.valorNumerico)
-  return unidad ? `${numero} ${unidad}` : numero
+  const numeroFormateado = numeroPreciso.format(props.valorNumerico)
+  return unidad ? `${numeroFormateado} ${unidad}` : numeroFormateado
 })
 </script>
 

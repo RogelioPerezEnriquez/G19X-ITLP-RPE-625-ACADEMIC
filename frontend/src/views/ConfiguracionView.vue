@@ -5,6 +5,9 @@ import { supabase } from '../services/supabase'
 import { useAuthStore } from '../stores/auth'
 import { useConfiguracionStore } from '../stores/configuracion'
 import { useRecomendacionesStore } from '../stores/recomendaciones'
+// Formato mexicano centralizado para mostrar el valor persistido (p. ej.
+// 0.5). Los inputs usan el formato estándar de HTML5 number (punto decimal).
+import { numeroPreciso } from '../utils/formato'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -17,12 +20,6 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const recalculando = ref(false)
 const mensajeRecalculo = ref('')
 const errorRecalculo = ref('')
-
-// Formato español para mostrar el valor persistido (p. ej. 0,5). Los inputs
-// usan el formato estándar de HTML5 number (punto decimal).
-const formateadorNumero = new Intl.NumberFormat('es-ES', {
-  maximumFractionDigits: 4,
-})
 
 // Parámetros cuyo valor representa un porcentaje o puntaje en escala 0-100.
 // Nota: eoq_min_pct / eoq_max_pct se excluyen porque su rango válido supera
@@ -227,7 +224,7 @@ onMounted(() => {
               v-if="fueModificado(parametro)"
               class="mt-0.5 text-xs text-blue-600"
             >
-              Valor actual: {{ formateadorNumero.format(parametro.valorOriginal) }}
+              Valor actual: {{ numeroPreciso.format(parametro.valorOriginal) }}
             </p>
           </div>
 

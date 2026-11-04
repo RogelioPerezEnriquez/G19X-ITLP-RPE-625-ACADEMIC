@@ -4,6 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { useRecomendacionesStore } from '../stores/recomendaciones'
 import { CRITERIOS_ORDENADOS } from '../constants/criterios'
 import CriterioCard from '../components/CriterioCard.vue'
+// Formato mexicano centralizado: cantidades "5,000", montos "$1,470.64" y
+// valores precisos como el CV de la demanda.
+import { moneda, numero, numeroPreciso } from '../utils/formato'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,38 +59,20 @@ const criteriosConEvaluacion = computed(() => {
   })
 })
 
-// Formato español: separador de miles "." y decimal ",". `useGrouping:
-// 'always'` fuerza el separador en números de cuatro cifras (p. ej.
-// "1.470,64" en lugar de "1470,64").
-const formateadorCantidad = new Intl.NumberFormat('es-ES', {
-  maximumFractionDigits: 2,
-  useGrouping: 'always',
-})
-
-const formateadorDecimales = new Intl.NumberFormat('es-ES', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-  useGrouping: 'always',
-})
-
-const formateadorCv = new Intl.NumberFormat('es-ES', {
-  maximumFractionDigits: 4,
-  useGrouping: 'always',
-})
-
 function formatearCon(formateador, valor) {
   if (valor === null || valor === undefined) return '—'
-  const numero = Number(valor)
-  return Number.isFinite(numero) ? formateador.format(numero) : '—'
+  const valorNumerico = Number(valor)
+  return Number.isFinite(valorNumerico) ? formateador.format(valorNumerico) : '—'
 }
 
 function formatearMoneda(valor) {
-  const texto = formatearCon(formateadorDecimales, valor)
-  return texto === '—' ? texto : `$ ${texto}`
+  if (valor === null || valor === undefined) return '—'
+  const monto = Number(valor)
+  return Number.isFinite(monto) ? moneda.format(monto) : '—'
 }
 
 function formatearDias(valor) {
-  const texto = formatearCon(formateadorCantidad, valor)
+  const texto = formatearCon(numero, valor)
   return texto === '—' ? texto : `${texto} días`
 }
 
@@ -95,16 +80,16 @@ const datosRecomendacion = computed(() => {
   const d = detalle.value
   if (!d) return []
   return [
-    { etiqueta: 'Demanda estimada', valor: formatearCon(formateadorCantidad, d.demanda_estimada) },
-    { etiqueta: 'CV de la demanda', valor: formatearCon(formateadorCv, d.cv_demanda) },
-    { etiqueta: 'Punto de reorden', valor: formatearCon(formateadorCantidad, d.punto_reorden) },
-    { etiqueta: 'Stock de seguridad', valor: formatearCon(formateadorCantidad, d.stock_seguridad) },
-    { etiqueta: 'Cantidad EOQ', valor: formatearCon(formateadorCantidad, d.cantidad_eoq) },
-    { etiqueta: 'Cantidad recomendada', valor: formatearCon(formateadorCantidad, d.cantidad_recomendada) },
+    { etiqueta: 'Demanda estimada', valor: formatearCon(numero, d.demanda_estimada) },
+    { etiqueta: 'CV de la demanda', valor: formatearCon(numeroPreciso, d.cv_demanda) },
+    { etiqueta: 'Punto de reorden', valor: formatearCon(numero, d.punto_reorden) },
+    { etiqueta: 'Stock de seguridad', valor: formatearCon(numero, d.stock_seguridad) },
+    { etiqueta: 'Cantidad EOQ', valor: formatearCon(numero, d.cantidad_eoq) },
+    { etiqueta: 'Cantidad recomendada', valor: formatearCon(numero, d.cantidad_recomendada) },
     { etiqueta: 'Lead time', valor: formatearDias(d.lead_time_dias) },
     { etiqueta: 'Precio unitario', valor: formatearMoneda(d.precio_unitario) },
     { etiqueta: 'Ahorro neto estimado', valor: formatearMoneda(d.ahorro_neto_estimado) },
-    { etiqueta: 'Stock actual', valor: formatearCon(formateadorCantidad, d.producto?.stock_actual) },
+    { etiqueta: 'Stock actual', valor: formatearCon(numero, d.producto?.stock_actual) },
   ]
 })
 

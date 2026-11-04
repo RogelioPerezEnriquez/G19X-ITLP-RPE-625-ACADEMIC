@@ -176,6 +176,9 @@ export const useRecomendacionesStore = defineStore('recomendaciones', {
           .from('recomendaciones')
           .select(SELECT_DETALLE)
           .eq(columnaFiltro, productoId)
+          // Solo las pendientes, igual que en listar(): las 'revisada' y
+          // 'descartada' son historial y no deben abrirse en el detalle.
+          .eq('estado', 'pendiente')
           .order('fecha_generacion', { ascending: false })
           .limit(1)
           .maybeSingle()
@@ -187,6 +190,7 @@ export const useRecomendacionesStore = defineStore('recomendaciones', {
             .from('recomendaciones')
             .select(SELECT_DETALLE)
             .eq(columnaFiltro, productoId)
+            .eq('estado', 'pendiente')
             .order('fecha_generacion', { ascending: false })
             .limit(1)
 

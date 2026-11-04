@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import UrgenciaBadge from './UrgenciaBadge.vue'
+// Formato mexicano centralizado: montos "$1,470.64" y cantidades "5,000".
+import { moneda, numero } from '../utils/formato'
 
 const props = defineProps({
   recomendacion: {
@@ -10,37 +12,17 @@ const props = defineProps({
   },
 })
 
-// Formato español: separador de miles "." y decimal "," (p. ej. 1.470,64).
-// `useGrouping: 'always'` es necesario porque el español, por defecto
-// (minimumGroupingDigits = 2), omite el separador de miles en números de
-// cuatro cifras y devolvería "1470,64" en lugar de "1.470,64".
-const formateadorDecimales = new Intl.NumberFormat('es-ES', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-  useGrouping: 'always',
-})
-
-// Las cantidades no fuerzan decimales (5.000 en lugar de 5.000,00).
-const formateadorCantidad = new Intl.NumberFormat('es-ES', {
-  maximumFractionDigits: 2,
-  useGrouping: 'always',
-})
-
-function formatearDecimal(valor) {
-  const numero = Number(valor)
-  return Number.isFinite(numero) ? formateadorDecimales.format(numero) : '—'
-}
-
+// Las cantidades no fuerzan decimales (5,000 en lugar de 5,000.00).
 function formatearCantidad(valor) {
-  const numero = Number(valor)
-  return Number.isFinite(numero) ? formateadorCantidad.format(numero) : '—'
+  const cantidad = Number(valor)
+  return Number.isFinite(cantidad) ? numero.format(cantidad) : '—'
 }
 
-// Los montos se expresan en pesos mexicanos con el símbolo "$" antes del
-// número (p. ej. $1.470,64), igual que en el panel de KPIs.
+// Los montos se expresan en pesos mexicanos con el símbolo "$" (lo incluye
+// el formateador `moneda`), igual que en el panel de KPIs.
 function formatearMoneda(valor) {
-  const texto = formatearDecimal(valor)
-  return texto === '—' ? texto : `$${texto}`
+  const monto = Number(valor)
+  return Number.isFinite(monto) ? moneda.format(monto) : '—'
 }
 
 const clasificacion = computed(() => {

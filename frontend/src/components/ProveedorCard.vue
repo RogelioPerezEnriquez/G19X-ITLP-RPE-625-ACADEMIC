@@ -2,6 +2,10 @@
 import { computed } from 'vue'
 import ScoreBadge from './ScoreBadge.vue'
 import BarraProgreso from './BarraProgreso.vue'
+// Formato mexicano centralizado con un decimal (p. ej. "96.2"): el score
+// siempre se muestra con un decimal para que los cortes de estado sean
+// legibles (60.0 vs 60).
+import { score } from '../utils/formato'
 
 const props = defineProps({
   proveedor: {
@@ -10,16 +14,9 @@ const props = defineProps({
   },
 })
 
-// Formato español con un decimal (p. ej. "96,2"). El score siempre se muestra
-// con un decimal para que los cortes de estado sean legibles (60,0 vs 60).
-const formateadorScore = new Intl.NumberFormat('es-ES', {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-})
-
 const scoreFormateado = computed(() => {
   const numero = Number(props.proveedor.score)
-  return Number.isFinite(numero) ? formateadorScore.format(numero) : '—'
+  return Number.isFinite(numero) ? score.format(numero) : '—'
 })
 </script>
 

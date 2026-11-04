@@ -1,5 +1,9 @@
 <script setup>
 import { computed } from 'vue'
+// Formato mexicano centralizado: porcentaje con punto decimal (p. ej.
+// "66.7 %"). Se importa con alias porque el computed de abajo se llama
+// `porcentaje`.
+import { porcentaje as formatoPorcentaje } from '../utils/formato'
 
 const props = defineProps({
   etiqueta: {
@@ -20,11 +24,6 @@ const props = defineProps({
   },
 })
 
-// Formato español: decimal con "," (p. ej. "66,7 %").
-const formateador = new Intl.NumberFormat('es-ES', {
-  maximumFractionDigits: 1,
-})
-
 // Porcentaje del valor sobre el total; con total 0 se muestra 0 para evitar
 // divisiones por cero.
 const porcentaje = computed(() => {
@@ -32,9 +31,9 @@ const porcentaje = computed(() => {
   return (props.valor / props.total) * 100
 })
 
-const porcentajeFormateado = computed(() => `${formateador.format(porcentaje.value)} %`)
+const porcentajeFormateado = computed(() => `${formatoPorcentaje.format(porcentaje.value)} %`)
 
-const valorFormateado = computed(() => formateador.format(props.valor))
+const valorFormateado = computed(() => formatoPorcentaje.format(props.valor))
 
 // El ancho de la barra se acota a [0, 100] para no romper el layout.
 const anchoPct = computed(() => Math.min(100, Math.max(0, porcentaje.value)))
