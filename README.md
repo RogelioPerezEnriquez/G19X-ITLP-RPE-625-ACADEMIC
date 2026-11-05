@@ -261,7 +261,7 @@ cd backend
 python -m pytest -q
 ```
 
-Esperado: 462 tests pasando.
+Esperado: 466 tests pasando.
 
 Ver `docs/verificacion.md` para la guía completa de verificación.
 
