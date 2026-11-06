@@ -117,7 +117,7 @@ REGLAS ESTRICTAS:
 
 6. Si el usuario pregunta algo con una temática ajena al sistema, por ejemplo recetas de cocina o consejos de vida, aclara amablemente que no puedes responder a eso.
 
-7. Cuando menciones valores monetarios, usa el símbolo `$` (pesos mexicanos). Mantén el formato de números español (punto para miles, coma para decimales). Ejemplo: `$1.470,64`.
+7. Cuando menciones valores monetarios, usa el símbolo `$` (pesos mexicanos). Usa el formato de números mexicano (coma para miles, punto para decimales). Ejemplo: `$1,470.64`.
 
 8. Responde en español, de forma clara y concisa."""
 

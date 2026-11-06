@@ -317,8 +317,11 @@ def test_una_fila_por_producto_valido_con_las_metricas_del_motor():
     assert fila["costo_unitario"] == pytest.approx(10.0)
     assert fila["costo_ordenar"] == pytest.approx(50.0)
     assert fila["costo_mantener_pct_anual"] == pytest.approx(20.0)
-    # Sin descuento declarado el pedido es el EOQ y no hay ahorro.
-    assert fila["cantidad_recomendada"] == pytest.approx(fila["cantidad_eoq"])
+    # Sin descuento declarado el pedido es el EOQ redondeado hacia arriba a
+    # piezas enteras (np.ceil) y no hay ahorro.
+    assert fila["cantidad_recomendada"] == pytest.approx(
+        np.ceil(fila["cantidad_eoq"])
+    )
     assert fila["ahorro_bruto"] == pytest.approx(0.0)
     assert fila["costo_extra_mantener"] == pytest.approx(0.0)
     assert fila["ahorro_neto_estimado"] == pytest.approx(0.0)
@@ -368,9 +371,11 @@ def test_umbral_y_descuento_pueden_ser_nan_sin_que_falle_el_calculo():
     assert resultado.loc[con_descuento, "cantidad_umbral_descuento"].notna().all()
     assert sin_descuento["descuento_pct"].isna().all()
     assert sin_descuento["cantidad_umbral_descuento"].isna().all()
-    # El nulo no impide calcular: pedido igual al EOQ y sin oportunidad de ahorro.
+    # El nulo no impide calcular: pedido igual al EOQ redondeado hacia arriba
+    # a piezas enteras (np.ceil) y sin oportunidad de ahorro.
     assert (
-        sin_descuento["cantidad_recomendada"] == sin_descuento["cantidad_eoq"]
+        sin_descuento["cantidad_recomendada"]
+        == np.ceil(sin_descuento["cantidad_eoq"])
     ).all()
     assert (sin_descuento["ahorro_neto_estimado"] == 0.0).all()
     assert (sin_descuento["estado_ahorro"] == "Sin oportunidad adicional").all()
