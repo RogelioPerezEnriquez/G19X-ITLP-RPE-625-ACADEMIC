@@ -73,7 +73,7 @@ para todos los productos.»
    python -m pytest -q
    ```
 
-   Esperado: `466 passed` (254 de los 466 tests corresponden a los 6
+   Esperado: `467 passed` (254 de los 467 tests corresponden a los 6
    módulos del motor: `abc.py`, `xyz.py`, `demanda.py`, `eoq_rop.py`,
    `proveedor.py`, `ahorro.py`).
 
@@ -98,8 +98,8 @@ para todos los productos.»
   §Notas de integración («Verificación end-to-end exitosa»).
 - Procedimiento reproducible en `docs/verificacion.md` (Niveles 1 y 3).
 - Nota: versiones anteriores de esta documentación registraban 403
-  tests (commit `23b134b`, 30/09/2026) y luego 462 tests; la cifra
-  vigente es 466 (verificado sobre el estado actual de la rama
+  tests (commit `23b134b`, 30/09/2026) y luego 462 y 466 tests; la cifra
+  vigente es 467 (verificado sobre el estado actual de la rama
   `main`, en `docs/estado-implementacion.md`).
 
 
@@ -134,7 +134,7 @@ SELECT criterio, count(*) FROM evaluaciones_criterios GROUP BY criterio;
   («Verificación end-to-end completa (recomendador + evaluador): 6
   recomendaciones, 36 evaluaciones»).
 - El evaluador tiene 79 tests (`backend/tests/test_evaluador.py`) dentro
-  de la suite de 466.
+  de la suite de 467.
 
 ## Criterio 4 — Cola de recomendaciones priorizada
 
@@ -217,7 +217,7 @@ manual (`python scripts/verificar_agente_rapido.py`).
   (`backend/src/agente/tools.py`, con `SUPABASE_ANON_KEY`) y toda
   respuesta se basa en el resultado de una función consultada.
 - 27 tests de tools (`backend/tests/test_tools.py`) y 18 del cliente LLM
-  (`backend/tests/test_llm_client.py`) dentro de la suite de 466.
+  (`backend/tests/test_llm_client.py`) dentro de la suite de 467.
 
 ## Criterio 7 — Umbral modificable sin tocar código
 

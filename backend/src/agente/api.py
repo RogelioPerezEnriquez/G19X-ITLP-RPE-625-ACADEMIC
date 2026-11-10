@@ -254,7 +254,9 @@ def recalcular_endpoint(
     Raises:
         HTTPException(401): si el token falta o es inválido.
         HTTPException(403): si el usuario no es admin.
-        HTTPException(500): si el pipeline falla.
+        HTTPException(400): si la configuración de parámetros es incoherente
+            (``ValueError`` del pipeline, con el mensaje que indica qué corregir).
+        HTTPException(500): si el pipeline falla por otra causa.
     """
     # 1. Crear el cliente con service_role. Las tablas que toca este endpoint
     # (`admins`, `recomendaciones`, `evaluaciones_criterios`) tienen RLS con
@@ -303,6 +305,9 @@ def recalcular_endpoint(
     # 3. Ejecutar el pipeline con el mismo cliente service_role.
     try:
         resultado = ejecutar_pipeline_completo(supabase_admin)
+    except ValueError as e:
+        # Configuración incoherente: el mensaje de evaluador.py ya dice qué corregir.
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception(
             "Error al recalcular el pipeline para %s", usuario.get("email")

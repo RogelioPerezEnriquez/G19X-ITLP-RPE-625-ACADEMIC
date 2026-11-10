@@ -270,6 +270,32 @@ def test_recalcular_pipeline_fallido_devuelve_500_generico(client_autenticado):
     assert detalle_secreto not in respuesta.text
 
 
+def test_recalcular_configuracion_incoherente_devuelve_400(client_autenticado):
+    """Si el pipeline lanza ``ValueError`` se devuelve 400 con el mensaje.
+
+    A diferencia del 500 genérico, el mensaje del ``ValueError`` (que indica
+    qué parámetro corregir) sí se expone al cliente en ``detail``.
+    """
+    mensaje_configuracion = (
+        "Error de configuración: 'eoq_min_pct' debe ser menor que 'eoq_max_pct'."
+    )
+    with (
+        patch.dict(os.environ, _entorno_supabase()),
+        patch(
+            "src.agente.api.create_client",
+            return_value=_cliente_supabase_mock(es_admin=True),
+        ),
+        patch(
+            "src.agente.api.ejecutar_pipeline_completo",
+            side_effect=ValueError(mensaje_configuracion),
+        ),
+    ):
+        respuesta = client_autenticado.post("/recomendaciones/recalcular")
+
+    assert respuesta.status_code == 400
+    assert mensaje_configuracion in respuesta.json()["detail"]
+
+
 def test_recalcular_admin_devuelve_200_con_conteos(client_autenticado):
     """Un admin obtiene 200 con los conteos devueltos por el pipeline."""
     conteos = {"recomendaciones_generadas": 6, "evaluaciones_generadas": 36}
