@@ -103,7 +103,7 @@ funciona con cualquier dataset que respete el esquema de `db/schema.sql`.
 ```
 
 **Nota**: el PRD y el MVP no están incluidos en el repositorio; se
-distribuyen en la plataforma.
+distribuyen en la plataforma en la sección Documentos del SGPA → Técnicos (buscar los archivos `PRD v1` y `MVP v1`).
 
 ---
 
@@ -196,7 +196,7 @@ Variables requeridas:
 | `VITE_API_URL` | URL de la API del agente (por ejemplo, `http://localhost:8000`) |
 
 **¿De dónde saco estas llaves?**
-- Si eres el **evaluador**, todas las credenciales (URL de Supabase, API Keys y LLM API Key) se entregan en la plataforma, en la sección **Documentos del SGPA → Técnicos → Accesos de prueba**.
+- Si eres el **evaluador**, todas las credenciales (URL de Supabase, API Keys y LLM API Key) se entregan en la plataforma, en la sección **Documentos del SGPA → Técnicos → Accesos de prueba** (Nota: accesos-v2.md es el archivo con la versión más reciente de los datos requeridos, utilizar cualquier otra versión no funcionará).
 - Si estás **instalando el proyecto desde cero**, las llaves de Supabase las obtienes en tu propio panel de Supabase (Project Settings → API) y la de Z.ai en tu cuenta de Z.ai. (Ver la sección "Si no tienes acceso a mi Supabase").
 
 **Nunca** subas el archivo `.env` al repositorio. Está en `.gitignore`.
