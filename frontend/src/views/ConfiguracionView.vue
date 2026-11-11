@@ -302,9 +302,11 @@ onMounted(() => {
         <button
           type="button"
           class="rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="recalculando || configuracionStore.hayCambios || configuracionStore.guardando"
+          :disabled="recalculando || configuracionStore.hayCambios || configuracionStore.guardando || erroresValidacion.length > 0"
           @click="recalcular"
-          title="Regenera las recomendaciones y evaluaciones con los parámetros actuales"
+          :title="erroresValidacion.length > 0
+            ? 'Corrige los errores de validación antes de recalcular'
+            : 'Regenera las recomendaciones y evaluaciones con los parámetros actuales'"
         >
           {{ recalculando ? 'Recalculando...' : 'Recalcular recomendaciones' }}
         </button>
